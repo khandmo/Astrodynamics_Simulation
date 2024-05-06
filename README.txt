@@ -57,3 +57,11 @@ Real Modeling Description -
 https://ilrs.gsfc.nasa.gov/docs/2014/196C.pdf
 2-body Einstein approximation Method-
 Introducing Einstein's Relativity - Ray D'Inverno
+
+Future:
+To actually do simulations, SPICE will need to be integrated into the system for accurate
+planetary locations. Then, realistic gravitational equations including ODE solvers will
+need to be implemented to predict the future orbit of spacecraft that navigate this solar
+system. Without the ability to implement spacecraft, which require realistic gravitational
+equations and methods for solving them, this program is a glorified demo, and simulates 
+exactly nothing.

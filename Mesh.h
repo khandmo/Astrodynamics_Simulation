@@ -6,6 +6,7 @@
 #include "EBO.h"
 #include "Camera.h"
 #include "Textures.h"
+#include "Shaders.h"
 
 /*
 Mesh holds all physical data about an object including the model data, whether or not it is a light source or a ring system,
@@ -19,6 +20,8 @@ public:
 	std::vector <GLuint> indices;
 	std::vector <Texture> textures;
 	GLuint depthMap = 0;
+	Mesh* gravSource; // body whose SOI this body is currently in / body which exerts the greatest grav field on body in solar system
+	int soiID; // sphere of influence identification for 2 body equations
 
 	bool isLightSource;
 	bool areRings;
@@ -27,6 +30,7 @@ public:
 	glm::vec3 oPos; // holder for trails
 	glm::vec3 rPos; // relative posiition to gravitational source
 	glm::vec3 sphPos;
+	glm::vec3 Vel; // world velocity
 	glm::mat4 Model;
 	bool sign = false; // if rings, checks to see if sun has crossed ring plane
 
@@ -36,17 +40,23 @@ public:
 	float ecc = 0;
 	float epsilon = 0;
 
+	float radRot;
 	GLfloat currAngleRad = 0;
 	GLfloat axisTiltDegree = 0;
 	glm::vec3 Up = glm::vec3(0.0f, 1.0f, 0.0f);
 
-	Shader* ShaderProgram;
-	Shader* shadowShaderProgram;
+	Shader ShaderProgramActual = Shader("default.vert", "default.frag"); // set to be modified
+	Shader* ShaderProgram = nullptr;
+	Shader shadowShaderProgramActual = Shader("default.vert", "default.frag");
+	Shader* shadowShaderProgram = nullptr;
 	glm::mat4 lsMatrix = glm::mat4(1.0f); // light space matrix for shadows
 
 	VAO VAO;
 
-	Mesh(const char* objName, std::vector<Vertex>& vertices, std::vector <GLuint>& indices, std::vector <Texture>& textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader* shaderProgram, GLfloat objMass);
+
+
+
+	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, GLfloat objMass);
 
 	// sets shader program for depth map
 	void setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix);
@@ -67,13 +77,13 @@ public:
 	void Draw(Camera& camera);
 
 	// rotates body at speed on specific axis and assigns light shader appropriately
-	void Rotate(GLfloat angleRad, Mesh lightSource);
+	void Rotate(Mesh* lightSource, float dt);
 
 	// rotates model along x axis by degree given
 	void AxialTilt(GLfloat tiltDeg);
 
 	// calculate orbital position
-	void Orbit(Mesh& source, Mesh& lightSource, glm::vec3 objVel, float dt);
+	void Orbit(Mesh* lightSource, float dt);  // MIGHT HAVE TO HOLD VELOCITY AND PARENT SOURCE AS MESH PROPERTY, GET LIGHT SOURCES FROM SYSTEM
 
 	// update model position and orientation
 	void updateModel(Mesh& source);
