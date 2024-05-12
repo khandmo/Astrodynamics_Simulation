@@ -29,7 +29,6 @@ void Camera::updateMatrix(float FOVdeg, float nearPlane, float farPlane) {
 void Camera::Matrix(Shader& shader, const char* uniform) {
 	// send camera matrix to model shaders
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
-
 }
 
 void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) {
@@ -202,11 +201,9 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) {
 		// scroll through object in focus
 		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { // move backward through object list focus
 			focusBody == 0 ? focusBody = bodyPos.size() - 1 : focusBody -= 1;
-			std::cout << focusBody << '\n';
 		}
 		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { // move forward through object list focus
 			focusBody == bodyPos.size() - 1 ? focusBody = 0 : focusBody += 1;
-			std::cout << focusBody << '\n';
 		}		
 		// focus mode zoom in / zoom out
 		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { // zoom in

@@ -45,10 +45,8 @@ public:
 	GLfloat axisTiltDegree = 0;
 	glm::vec3 Up = glm::vec3(0.0f, 1.0f, 0.0f);
 
-	Shader ShaderProgramActual = Shader("default.vert", "default.frag"); // set to be modified
-	Shader* ShaderProgram = nullptr;
-	Shader shadowShaderProgramActual = Shader("default.vert", "default.frag");
-	Shader* shadowShaderProgram = nullptr;
+	Shader ShaderProgram = Shader("default.vert", "default.frag"); // set to be modified
+	Shader shadowShaderProgram = Shader("default.vert", "default.frag");
 	glm::mat4 lsMatrix = glm::mat4(1.0f); // light space matrix for shadows
 
 	VAO VAO;

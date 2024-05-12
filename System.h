@@ -8,8 +8,6 @@
 
 class System {
 public:
-	int numBodies = 0;
-	int numArtBodies = 0;
 
 	std::vector <Mesh> bodiesActual; // holds the body meshes
 	std::vector <Mesh*> bodies; // holds the addresses to the body meshes
@@ -26,7 +24,7 @@ public:
 	System(); // initializes main bodies, shaders / saved game?
 
 	// generates body given, shaderType toggles emission/dull shader modes, adds bodies to pertenant lists
-	Mesh initBody(const char* name, const char* texFilePath, glm::vec3 pos, glm::vec3 vel, float mass, float radius, float axialTilt, float angleOfRot, bool isLight, bool areRings, int soiID);
+	Mesh initBody(const char* name, const char* texFilePath, glm::vec3 pos, glm::vec3 vel, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, int soiID);
 
 	void updateBodyState(); // handles input during application run-time
 
@@ -36,7 +34,5 @@ public:
 
 	void deleteShaders(); // deletes shaders for EOP
 };
-
-
 #endif 
  

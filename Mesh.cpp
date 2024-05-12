@@ -24,8 +24,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	Mesh::Model = objModel;
 
 	// set object shader program
-	Mesh::ShaderProgramActual = *shaderProgram;
-	Mesh::ShaderProgram = &ShaderProgramActual;
+	Mesh::ShaderProgram = *shaderProgram;
 
 	// vertex attribute object to send to GPU - array of attributes or states of vertices which package VBO's to send to GPU
 	VAO.Bind();
@@ -45,7 +44,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
 	// Links to Colors (layout 2 for shader, offset by 6 from start of pos
 	VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
-	// Links Texture (layout 3 for shaders, offset by 8 from the start of pos
+	// Links Texture (layout 3 for shaders, offset by 9 from the start of pos
 	VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
 	VAO.Unbind();
 	VBO.Unbind();
@@ -53,14 +52,13 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 }
 
 void Mesh::setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix) {
-	shadowShaderProgramActual = program;
-	shadowShaderProgram = &shadowShaderProgramActual;
-	lsMatrix = lightSpaceMatrix;
+	Mesh::shadowShaderProgram = program;
+	Mesh::lsMatrix = lightSpaceMatrix;
 }
 
 void Mesh::switchShader() {
-	if (shadowShaderProgram != NULL) {
-		Shader* dummy = shadowShaderProgram;
+	if (shadowShaderProgram.ID != NULL) {
+		Shader dummy = shadowShaderProgram;
 		shadowShaderProgram = ShaderProgram;
 		ShaderProgram = dummy;
 	}
@@ -71,30 +69,32 @@ void Mesh::setDepthMap(GLuint depthMapInput) {
 }
 
 void Mesh::emissionShader() {
-	(*ShaderProgram).Activate();
+	(ShaderProgram).Activate();
 	// light shader position uniform
-	glUniformMatrix4fv(glGetUniformLocation((*ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
+	glUniformMatrix4fv(glGetUniformLocation((ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
 	// light shader color uniform (sun on sun)
-	glUniform4f(glGetUniformLocation((*ShaderProgram).ID, "lightColor"), Color.x, Color.y, Color.z, Color.w);
+	glUniform4f(glGetUniformLocation((ShaderProgram).ID, "lightColor"), Color.x, Color.y, Color.z, Color.w);
+
 }
 
 void Mesh::dullShader(Mesh& lightSource) {
-	(*ShaderProgram).Activate();
+	(ShaderProgram).Activate();
 	// model shader position uniform
-	glUniformMatrix4fv(glGetUniformLocation((*ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
+	glUniformMatrix4fv(glGetUniformLocation((ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
+
 	// model shader color uniform (sun on earth) and shader uniform
-	glUniform4f(glGetUniformLocation((*ShaderProgram).ID, "lightColor"), lightSource.Color.x, lightSource.Color.y, lightSource.Color.z, lightSource.Color.w);
-	glUniform3f(glGetUniformLocation((*ShaderProgram).ID, "lightPos"), lightSource.Pos.x, lightSource.Pos.y, lightSource.Pos.z);
+	glUniform4f(glGetUniformLocation((ShaderProgram).ID, "lightColor"), lightSource.Color.x, lightSource.Color.y, lightSource.Color.z, lightSource.Color.w);
+	glUniform3f(glGetUniformLocation((ShaderProgram).ID, "lightPos"), lightSource.Pos.x, lightSource.Pos.y, lightSource.Pos.z);
 
 	// uniform for depth and default
-	glUniformMatrix4fv(glGetUniformLocation((*ShaderProgram).ID, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lsMatrix));
+	glUniformMatrix4fv(glGetUniformLocation((ShaderProgram).ID, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lsMatrix));
 	// uniform for default
-	glUniform1i(glGetUniformLocation((*ShaderProgram).ID, "shadowMap"), 1); // maybe an issue here
+	glUniform1i(glGetUniformLocation((ShaderProgram).ID, "shadowMap"), 1);
 }
 
 void Mesh::Draw(Camera& camera) {
 
-	(*ShaderProgram).Activate();
+	(ShaderProgram).Activate();
 	VAO.Bind();
 
 	unsigned int numDiffuse = 0;
@@ -112,7 +112,7 @@ void Mesh::Draw(Camera& camera) {
 			num = std::to_string(numSpecular++);
 		}
 		// add texture unit - send texture uniforms to frag shaders
-		textures[i].texUnit((*ShaderProgram), (type + num).c_str(), i);
+		textures[i].texUnit((ShaderProgram), (type + num).c_str(), i);
 		// bind texture to uniform
 		textures[i].Bind();
 	}
@@ -123,7 +123,7 @@ void Mesh::Draw(Camera& camera) {
 		depthMap = 0;
 	}
 	// implement camera uniform usage and draw
-	camera.Matrix((*ShaderProgram), "camMatrix");
+	camera.Matrix((ShaderProgram), "camMatrix");
 
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 }

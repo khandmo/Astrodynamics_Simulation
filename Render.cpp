@@ -138,7 +138,6 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 
 	lightSpaceMatrix = lightProjection * lightView;
 
-	
 	// render to depth map
 	glViewport(0, 0, shadowWidth, shadowHeight);
 	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
@@ -161,7 +160,7 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 	glViewport(0, 0, screenWidth, screenHeight);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	for (int i = 0; i < bodies.size(); i++) {
-		//bodies[i]->switchShader();
+		bodies[i]->switchShader();
 		bodies[i]->setDepthMap(depthMap); // give depthMap to Mesh
 		if (i != 0) { // if not sun
 			bodies[i]->dullShader(*bodies[0]);  // send uniforms to normal shaders
@@ -227,6 +226,7 @@ void RenderSet::RenderSkyBox(Camera* camera) {
 	glBindVertexArray(skyboxVAO);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTex);
+
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	glBindVertexArray(0);
 	glDepthFunc(GL_LESS);
