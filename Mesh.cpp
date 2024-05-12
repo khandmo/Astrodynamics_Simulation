@@ -1,6 +1,6 @@
 #include "Mesh.h"
 
-Mesh::Mesh(const char* objName, std::vector <Vertex>& vertices, std::vector <GLuint>& indices, std::vector <Texture>& textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader* shaderProgram, GLfloat objMass){
+Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, GLfloat objMass){
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
 	Mesh::indices = indices;
@@ -11,6 +11,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex>& vertices, std::vector <GLu
 	Mesh::oPos = Pos;
 	Mesh::sphPos = Pos;
 	Mesh::mass = objMass;
+
 
 	// set object light emission color if any
 	if (isLight == true) {
@@ -23,7 +24,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex>& vertices, std::vector <GLu
 	Mesh::Model = objModel;
 
 	// set object shader program
-	Mesh::ShaderProgram = shaderProgram;
+	Mesh::ShaderProgram = *shaderProgram;
 
 	// vertex attribute object to send to GPU - array of attributes or states of vertices which package VBO's to send to GPU
 	VAO.Bind();
@@ -43,7 +44,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex>& vertices, std::vector <GLu
 	VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
 	// Links to Colors (layout 2 for shader, offset by 6 from start of pos
 	VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
-	// Links Texture (layout 3 for shaders, offset by 8 from the start of pos
+	// Links Texture (layout 3 for shaders, offset by 9 from the start of pos
 	VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
 	VAO.Unbind();
 	VBO.Unbind();
@@ -51,13 +52,13 @@ Mesh::Mesh(const char* objName, std::vector <Vertex>& vertices, std::vector <GLu
 }
 
 void Mesh::setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix) {
-	shadowShaderProgram = &program;
-	lsMatrix = lightSpaceMatrix;
+	Mesh::shadowShaderProgram = program;
+	Mesh::lsMatrix = lightSpaceMatrix;
 }
 
 void Mesh::switchShader() {
-	if (shadowShaderProgram != NULL) {
-		Shader* dummy = shadowShaderProgram;
+	if (shadowShaderProgram.ID != NULL) {
+		Shader dummy = shadowShaderProgram;
 		shadowShaderProgram = ShaderProgram;
 		ShaderProgram = dummy;
 	}
@@ -68,30 +69,32 @@ void Mesh::setDepthMap(GLuint depthMapInput) {
 }
 
 void Mesh::emissionShader() {
-	(*ShaderProgram).Activate();
+	(ShaderProgram).Activate();
 	// light shader position uniform
-	glUniformMatrix4fv(glGetUniformLocation((*ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
+	glUniformMatrix4fv(glGetUniformLocation((ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
 	// light shader color uniform (sun on sun)
-	glUniform4f(glGetUniformLocation((*ShaderProgram).ID, "lightColor"), Color.x, Color.y, Color.z, Color.w);
+	glUniform4f(glGetUniformLocation((ShaderProgram).ID, "lightColor"), Color.x, Color.y, Color.z, Color.w);
+
 }
 
 void Mesh::dullShader(Mesh& lightSource) {
-	(*ShaderProgram).Activate();
+	(ShaderProgram).Activate();
 	// model shader position uniform
-	glUniformMatrix4fv(glGetUniformLocation((*ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
+	glUniformMatrix4fv(glGetUniformLocation((ShaderProgram).ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
+
 	// model shader color uniform (sun on earth) and shader uniform
-	glUniform4f(glGetUniformLocation((*ShaderProgram).ID, "lightColor"), lightSource.Color.x, lightSource.Color.y, lightSource.Color.z, lightSource.Color.w);
-	glUniform3f(glGetUniformLocation((*ShaderProgram).ID, "lightPos"), lightSource.Pos.x, lightSource.Pos.y, lightSource.Pos.z);
+	glUniform4f(glGetUniformLocation((ShaderProgram).ID, "lightColor"), lightSource.Color.x, lightSource.Color.y, lightSource.Color.z, lightSource.Color.w);
+	glUniform3f(glGetUniformLocation((ShaderProgram).ID, "lightPos"), lightSource.Pos.x, lightSource.Pos.y, lightSource.Pos.z);
 
 	// uniform for depth and default
-	glUniformMatrix4fv(glGetUniformLocation((*ShaderProgram).ID, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lsMatrix));
+	glUniformMatrix4fv(glGetUniformLocation((ShaderProgram).ID, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lsMatrix));
 	// uniform for default
-	glUniform1i(glGetUniformLocation((*ShaderProgram).ID, "shadowMap"), 1); // maybe an issue here
+	glUniform1i(glGetUniformLocation((ShaderProgram).ID, "shadowMap"), 1);
 }
 
 void Mesh::Draw(Camera& camera) {
 
-	(*ShaderProgram).Activate();
+	(ShaderProgram).Activate();
 	VAO.Bind();
 
 	unsigned int numDiffuse = 0;
@@ -109,7 +112,7 @@ void Mesh::Draw(Camera& camera) {
 			num = std::to_string(numSpecular++);
 		}
 		// add texture unit - send texture uniforms to frag shaders
-		textures[i].texUnit((*ShaderProgram), (type + num).c_str(), i);
+		textures[i].texUnit((ShaderProgram), (type + num).c_str(), i);
 		// bind texture to uniform
 		textures[i].Bind();
 	}
@@ -120,17 +123,17 @@ void Mesh::Draw(Camera& camera) {
 		depthMap = 0;
 	}
 	// implement camera uniform usage and draw
-	camera.Matrix((*ShaderProgram), "camMatrix");
+	camera.Matrix((ShaderProgram), "camMatrix");
 
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 }
 
-void Mesh::Rotate(GLfloat angleRad, Mesh lightSource) {
+void Mesh::Rotate(Mesh* lightSource, float dt) {
 	// transforms model matrix by rotation
-	Model = glm::rotate(Model, angleRad, Up);
-	currAngleRad += angleRad;
+	Model = glm::rotate(Model, 2.0f * glm::pi<float>() * radRot / dt, Up);
+	currAngleRad += 2.0f * glm::pi<float>() * 0.0600068844f / dt;
 	// redraws the shader for modified model
-	dullShader(lightSource);
+	dullShader(*lightSource);
 }
 
 void Mesh::AxialTilt(GLfloat tiltDeg) {
@@ -139,7 +142,8 @@ void Mesh::AxialTilt(GLfloat tiltDeg) {
 	axisTiltDegree = tiltDeg;
 }
 
-void Mesh::Orbit(Mesh& source, Mesh& lightSource, glm::vec3 objVel, float dt) {
+void Mesh::Orbit(Mesh* lightSource, float dt) {
+
 	// if object has fallen into the sun leave it there
 	if (sphPos.x < 0) {
 		h = 0;
@@ -150,29 +154,29 @@ void Mesh::Orbit(Mesh& source, Mesh& lightSource, glm::vec3 objVel, float dt) {
 	// if initialization factors uninitilialized, calculate them
 	if (redMass == 0) {
 		std::cout << name << ": " << std::endl;
-		Pos = Pos - source.Pos;
+		Pos = Pos - gravSource->Pos;
 		sphPos = glm::vec3(glm::length(Pos), glm::acos(Pos.y / glm::length(Pos)), ((Pos.x / sqrt(Pos.x * Pos.x)) * glm::acos(Pos.z / sqrt(Pos.z * Pos.z + Pos.x * Pos.x))));
-		redMass = (1.0f / ((1.0f / mass) + (1.0f / source.mass)));
-		h = glm::length(glm::cross(Pos, (mass * objVel))) / redMass;
+		redMass = (1.0f / ((1.0f / mass) + (1.0f / gravSource->mass)));
+		h = glm::length(glm::cross(Pos, (mass * Vel))) / redMass;
 		std::cout << "h  is " << h << " L is " << h * mass << std::endl;
-		std::cout << "objVelocity is " << length(objVel) << std::endl;
-		std::cout << "stable circular angular velocity is " << sqrt(source.mass * sphPos.x) * redMass << std::endl; // angular velocity L
-		epsilon = (3 * source.mass * source.mass) / (h * h);
-		ecc = (((h * h) / (source.mass * sphPos.x)) - 1) / cos(sphPos.z * (1 - epsilon));
+		std::cout << "objVelocity is " << length(Vel) << std::endl;
+		std::cout << "stable circular angular velocity is " << sqrt(gravSource->mass * sphPos.x) * redMass << std::endl; // angular velocity L
+		epsilon = (3 * gravSource->mass * gravSource->mass) / (h * h);
+		ecc = (((h * h) / (gravSource->mass * sphPos.x)) - 1) / cos(sphPos.z * (1 - epsilon));
 		std::cout << "eccentricity is " << ecc << std::endl;
 	}
 
 	// 2 - body relativistic equations
 	float dPhi = h / (sphPos.x * sphPos.x);
 	sphPos.z += dPhi / dt; // note sphPos.z does not reset after 2pi, it numerically continues to grow during the sim
-	sphPos.x = pow((source.mass / (h * h)) * (1 + ecc * cos(sphPos.z * (1 - epsilon))), -1);
+	sphPos.x = pow((gravSource->mass / (h * h)) * (1 + ecc * cos(sphPos.z * (1 - epsilon))), -1);
 
 	// inclination implementation would involve sinusoidal variation of sphPos.y based on sphPos.z
 	
 
 	// turn back into cartesian
 	Pos = glm::vec3(sphPos.x * sin(sphPos.y) * sin(sphPos.z), sphPos.x * cos(sphPos.y), sphPos.x * sin(sphPos.y) * cos(sphPos.z));
-	Pos += source.Pos;
+	Pos += gravSource->Pos;
 
 	// if object are rings, meshes normals must be flipped when the sun crosses the ring plane (z-axis turning points)
 	if (areRings) { // below assumes the starting position is at z = 0
@@ -200,9 +204,9 @@ void Mesh::Orbit(Mesh& source, Mesh& lightSource, glm::vec3 objVel, float dt) {
 			VBO.Unbind();
 		}
 	}
-	
-	updateModel(source);
-	dullShader(lightSource);	
+
+	updateModel(*gravSource);
+	dullShader(*lightSource);	// ONLY TIME lightSource is used in this fxn
 }
 
 void Mesh::updateModel(Mesh& source) {

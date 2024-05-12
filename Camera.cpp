@@ -29,7 +29,6 @@ void Camera::updateMatrix(float FOVdeg, float nearPlane, float farPlane) {
 void Camera::Matrix(Shader& shader, const char* uniform) {
 	// send camera matrix to model shaders
 	glUniformMatrix4fv(glGetUniformLocation(shader.ID, uniform), 1, GL_FALSE, glm::value_ptr(cameraMatrix));
-
 }
 
 void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) {
@@ -76,6 +75,7 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) 
 	if (focusMode == true) {
 		Position = *bodyPos[focusBody] + focusPos;
 	}
+
 	
 	//mouse controls
 	if (!focusMode) {

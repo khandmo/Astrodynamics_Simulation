@@ -34,14 +34,12 @@ public:
 
 	// initializer
 	RenderSet(GLFWwindow* window, Camera& camera, int width, int height);
-	// renders scene
-	void RenderObjects(Mesh* bodies[], const int numBodies);
 	// generates shadow maps and skybox
 	void set();
-	// render shadpw maps
-	void ShadowRender(Mesh* bodies[], const int numBodies, Camera* camera);
+	// render shadow maps
+	void ShadowRender(std::vector<Mesh*> &bodies, Camera* camera);
 	// move bodies
-	void Move(Mesh* bodies[], float dt);
+	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, float dt);
 	// render skybox
 	void RenderSkyBox(Camera* camera);
 };
