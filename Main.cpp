@@ -45,7 +45,8 @@ int main() {
 	
 	// set skybox and time float
 	bool skyboxOn = true;
-	float dt = 1.0f;
+	int dtRange[15] = { 100000, 50000, 25000, 10000, 5000, 2500, 1250, 625, 400, 200, 100, 25, 10, 5, 1 }; // fixed time warp range
+	int dt = 10; // current time warp index
 	float prevTime = glfwGetTime();
 	std::cout << "begining sim" << std::endl;
 
@@ -55,7 +56,7 @@ int main() {
 		float currTime = glfwGetTime();
 		
 		Sys.updateBodyState();
-		// input handling -  should add input for safe obliteration (cease while loop)
+		// input handling -  should add input for safe obliteratiob n (cease while loop)
 		(camera).smoothInputs(window, Sys.bodyPos);
 		if (currTime - prevTime > 0.08) {
 			prevTime = currTime;
@@ -66,17 +67,19 @@ int main() {
 			}
 			// time warp
 			if (glfwGetKey(window, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS) {
-				dt /= 2;
+				if (dt < 14)
+					dt++;
 			}
 			else if (glfwGetKey(window, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS) {
-				dt *= 2; // time step decrease
+				if (dt > 0)
+					dt--; // time step decrease
 			}
 		}
 		(camera).updateMatrix(45.0f, 0.1f, 6100.0f); // to be able to see the sun from neptune
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
-		Renderer.Move(Sys.bodies, Sys.lightBodies, dt);
+		Renderer.Move(Sys.bodies, Sys.lightBodies, (float)(dtRange[dt]) / 100); // dt itself can rely on larger numbers, higher dtRange means fast time warp with inverse
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
 		}

@@ -225,15 +225,17 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 			}
 			else {
 				focusBody++;
-				focusPos *= (bodyRadii[focusBody] / bodyRadii[focusBody + 1]);
+				focusPos *= (bodyRadii[focusBody] / bodyRadii[focusBody - 1]);
 			}
 		}		
 		// focus mode zoom in / zoom out
 		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { // zoom in
+			std::cout << focusDistMarker << '\n';
 			if (focusDistMarker > 0)
 				focusPos *= (focusDistSeg[focusDistMarker - 1] / focusDistSeg[focusDistMarker--]);
 		}
 		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { // zoom out
+			std::cout << focusDistMarker << '\n';
 			if (focusDistMarker < 50)
 				focusPos *= (focusDistSeg[focusDistMarker + 1] / focusDistSeg[focusDistMarker++]);
 		}
