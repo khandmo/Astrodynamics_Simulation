@@ -7,6 +7,15 @@ Camera::Camera(int width, int height, glm::vec3 position) {
 	Camera::height = height;
 	Position = position;
 	OrigPos = position;
+
+	// initialize focusDistSeg
+	focusDistSeg[0] = 1.25;
+	for (int i = 1; i < 50; i++) {
+		if (i <= 25)
+			focusDistSeg[i] = focusDistSeg[i - 1] + 0.25;
+		else
+			focusDistSeg[i] = focusDistSeg[i - 1] + 0.75;
+	}
 }
 
 void Camera::updateMatrix(float FOVdeg, float nearPlane, float farPlane) {
@@ -170,7 +179,7 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) 
 	}
 }
 
-void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) {
+void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, std::vector<float> &bodyRadii) {
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) { // cycle camera positions
 		// should change main body based on focus mode
 		if (cameraViewCycle == 0) { // top down
@@ -192,28 +201,41 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) {
 		if (focusMode == true) {
 			// reset focus parameters
 			focusBody = 0;
-			focusPos = glm::vec3(40.0f, 0.0f, 0.0f);
+			focusPos = glm::vec3((float)(focusDistSeg[focusDistMarker] * bodyRadii[focusBody]), 0.0f, 0.0f); // initialized as default focusDistMarker
 			// reset orientation to look at the center of object, regardless of position
 			Orientation = glm::vec3(-1.0f, 0.0f, 0.0f);
 		}
 	}
 	if (focusMode) {
 		// scroll through object in focus
-		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { // move backward through object list focus
-			focusBody == 0 ? focusBody = bodyPos.size() - 1 : focusBody -= 1;
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { // move backward through object list focus and preserve camera distance to body
+			if (focusBody == 0) {
+				focusBody = bodyPos.size() - 1;
+				focusPos *= (bodyRadii[focusBody] / bodyRadii[0]);
+			}
+			else {
+				focusBody--;
+				focusPos *= (bodyRadii[focusBody] / bodyRadii[focusBody + 1]);
+			}
 		}
-		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { // move forward through object list focus
-			focusBody == bodyPos.size() - 1 ? focusBody = 0 : focusBody += 1;
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { // move forward through object list focus and preserve camera distance to body
+			if (focusBody == bodyPos.size() - 1) {
+				focusBody = 0;
+				focusPos *= (bodyRadii[focusBody] / bodyRadii[bodyPos.size() - 1]);
+			}
+			else {
+				focusBody++;
+				focusPos *= (bodyRadii[focusBody] / bodyRadii[focusBody + 1]);
+			}
 		}		
 		// focus mode zoom in / zoom out
 		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { // zoom in
-			focusDistMult /= 1.5;
-			focusDistMult <= 1 ? focusPos *= focusDistMult : focusPos /= focusDistMult;
+			if (focusDistMarker > 0)
+				focusPos *= (focusDistSeg[focusDistMarker - 1] / focusDistSeg[focusDistMarker--]);
 		}
 		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { // zoom out
-			focusDistMult >= 1 ? focusPos *= focusDistMult : focusPos /= focusDistMult;
-			focusDistMult *= 1.5;
-			
+			if (focusDistMarker < 50)
+				focusPos *= (focusDistSeg[focusDistMarker + 1] / focusDistSeg[focusDistMarker++]);
 		}
 	}
 }

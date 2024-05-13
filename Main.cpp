@@ -60,7 +60,7 @@ int main() {
 		if (currTime - prevTime > 0.08) {
 			prevTime = currTime;
 			// for single click inputs
-			(camera).hardInputs(window, Sys.bodyPos);
+			(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii);
 			if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) { // toggles skybox
 				skyboxOn = !skyboxOn;
 			}

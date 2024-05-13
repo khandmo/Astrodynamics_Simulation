@@ -62,6 +62,7 @@ Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, 
 	body.AxialTilt(axialTilt);
 	body.Vel = vel; // assign body velocity
 	body.radRot = angleOfRot; // assign rotation speed
+	bodyRadii.push_back(radius);
 
 	return body;
 }
