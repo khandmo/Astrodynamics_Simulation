@@ -2,6 +2,7 @@
 #include "Object.h"
 #include "Render.h"
 
+
 int main() {
 	// glfw initiatizer
 	glfwInit();
@@ -28,7 +29,7 @@ int main() {
 	// Specify the window dimensions
 	glViewport(0, 0, width, height);
 
-	// initialize solar system & shaders
+	// initialize solar system, timers, and shaders
 	std::cout << "initializing" << '\n';
 	System Sys;
 	std::cout << "initialized" << '\n';
@@ -37,53 +38,63 @@ int main() {
 	glEnable(GL_DEPTH_TEST);
 	// initialize Camera with initial position
 	Camera camera(width, height, glm::vec3(130.0f, 0.0f, 0.0f));
-	
+
 	// initialize renderer
 	RenderSet Renderer(window, camera, width, height);
 	Renderer.set();
-	
-	
+
+	/* Buffer holds 3 digit weekday, month, date, hour:minute:second, year in system time
+	Can be adjusted for to UTC, but have to know personal time zone.Could put it in as input before simulation begins
+	*/
+
+
+
+
 	// set skybox and time float
 	bool skyboxOn = true;
-	int dtRange[15] = { 100000, 50000, 25000, 10000, 5000, 2500, 1250, 625, 400, 200, 100, 25, 10, 5, 1 }; // fixed time warp range
-	int dt = 10; // current time warp index
-	float prevTime = glfwGetTime();
-	std::cout << "begining sim" << std::endl;
+	int dtRange[15] = { 1, 2, 4, 8, 16, 32, 64, 100, 200, 500, 1000, 10000, 100000, 1000000, 10000000}; // fixed time warp range 1-10mil
+	int dt = 0; // current time warp index
+	bool dtChange = false;
+	float clickPTime = glfwGetTime();
+	Sys.SystemTime();
+	std::cout << "beginning sim" << std::endl;
 
 	// begin simulation
 	while (!glfwWindowShouldClose(window)) {
 		glClearColor(0.24f, 0.28f, 0.45f, 1.0f);
-		float currTime = glfwGetTime();
-		
+		float clickCTime = glfwGetTime();
+
 		Sys.updateBodyState();
-		// input handling -  should add input for safe obliteratiob n (cease while loop)
+
+		// input handling -  should add input for safe obliteration (cease while loop)
+		// for holding inputs
 		(camera).smoothInputs(window, Sys.bodyPos);
-		if (currTime - prevTime > 0.08) {
-			prevTime = currTime;
-			// for single click inputs
-			(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii);
-			if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS) { // toggles skybox
-				skyboxOn = !skyboxOn;
-			}
-			// time warp
-			if (glfwGetKey(window, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS) {
-				if (dt < 14)
-					dt++;
-			}
-			else if (glfwGetKey(window, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS) {
-				if (dt > 0)
-					dt--; // time step decrease
-			}
+		// for single click inputs
+		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii);
+
+		if (camera.keyPress(window, GLFW_KEY_P)) { // toggles skybox
+			skyboxOn = !skyboxOn;
 		}
-		(camera).updateMatrix(45.0f, 0.1f, 6100.0f); // to be able to see the sun from neptune
+		// TW GETS TRIGGERED TOO EASILY
+		if (camera.keyPress(window, GLFW_KEY_RIGHT_BRACKET)) { // should modify the simulation time accordingly wtih dt = 1 == 1 second/second
+			if (dt < 14)
+				dt++;
+		}
+		else if (camera.keyPress(window, GLFW_KEY_LEFT_BRACKET)) {
+			if (dt > 0)
+				dt--;
+		}
+		(camera).updateMatrix(45.0f, 0.1f, 6100.0f); // values to be able to see the sun from neptune
+
+		// Process time 
+		Sys.WarpClockSet(dtRange[dt]);
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
-		Renderer.Move(Sys.bodies, Sys.lightBodies, (float)(dtRange[dt]) / 100); // dt itself can rely on larger numbers, higher dtRange means fast time warp with inverse
+		//Renderer.Move(Sys.bodies, Sys.lightBodies, dtRange[dt]); // should replace dtRange with simTime variable
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
 		}
-
 
 		//update image each frame
 		glfwSwapBuffers(window);
@@ -91,8 +102,8 @@ int main() {
 		glfwPollEvents();
 	}
 
-	// terminatation handling - need new fxn NOW FROM SYSTEM
-
+	// terminatation handling
+	Sys.deleteSystem(); // need new fxn NOW FROM SYSTEM
 	glfwDestroyWindow(window);
 	glfwTerminate();
 	return 0;

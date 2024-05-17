@@ -1,4 +1,6 @@
 #include "System.h"
+
+
 System::System() {
 
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
@@ -28,6 +30,10 @@ System::System() {
 			bodies[i]->gravSource = &bodiesActual[bodies[i]->soiID];
 		}
 	}
+
+	// time memory save
+	sysTime = *(time_block*) malloc(sizeof(time_block));
+	simTime = *(time_block*) malloc(sizeof(time_block));
 
 	// set shaders
 	shaderSet();
@@ -87,4 +93,75 @@ void System::shaderSet() {
 			body->dullShader(*lights);
 		}
 	}
+}
+
+
+
+// time functions
+
+
+
+void System::SystemTime() {
+	char mess[30];
+	struct time_block currTime =  { std::chrono::system_clock::now(), *mess, 0};
+	auto hold = std::chrono::system_clock::to_time_t(currTime.timeUnit);
+	ctime_s(currTime.timeString, sizeof(currTime.timeString), &hold );
+	sysTime = currTime;
+	simTime = currTime;
+}
+
+void System::time_block_ms_add(time_block &someTime, int sum) {
+	if (sum > 1000) {
+		// throw exception for non three digit sum
+	}
+	someTime.ms += sum; // addition isn't being saved
+	std::string num = std::to_string(someTime.ms);
+	// handles overflowing ms
+	if (num.length() > 3) {
+		int overAmt = stoi(num.substr(0, num.length() - 3)) * 1000;
+		someTime.ms -= overAmt;
+
+		// adds reverse remainder to the total sum
+		auto timeUnitT = std::chrono::system_clock::to_time_t((someTime.timeUnit));
+		timeUnitT += overAmt/1000;
+		someTime.timeUnit = std::chrono::system_clock::from_time_t((timeUnitT));
+		ctime_s(someTime.timeString, sizeof(someTime.timeString), &timeUnitT);
+	}
+}
+
+
+void System::WarpClockSet(const int currWarp) {
+	// find current time and time elapsed since last update
+
+	char mess[30];
+	struct time_block currTime = { std::chrono::system_clock::now(), *mess, 0 };
+
+	std::chrono::duration<double> diff = 
+		std::chrono::time_point_cast<std::chrono::milliseconds>(currTime.timeUnit)
+		- std::chrono::time_point_cast<std::chrono::milliseconds>(sysTime.timeUnit);
+
+
+	if (diff.count() >= .2) {
+		double diffWarp = diff.count() * currWarp;
+		if (currWarp < 5) { 
+			//update ms timing
+			time_block_ms_add(simTime, (int)(diffWarp*1000));
+		}
+		// update with time warp multiplier
+		auto pastTimeUnit = std::chrono::system_clock::to_time_t((simTime.timeUnit));
+		pastTimeUnit += diffWarp;
+		simTime.timeUnit = std::chrono::system_clock::from_time_t(pastTimeUnit);
+
+		// update sim time and reset sys time
+		ctime_s(simTime.timeString, sizeof(simTime.timeString), &pastTimeUnit);
+		sysTime = currTime;
+		std::cout << simTime.timeString << '\n';
+	}
+}
+
+
+
+
+void System::deleteSystem() {
+
 }

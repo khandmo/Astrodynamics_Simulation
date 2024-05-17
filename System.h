@@ -5,6 +5,8 @@
 #include "Object.h"  
 #include "Textures.h"
 #include <vector>
+#include <chrono>
+#include <ctime>
 
 class System {
 public:
@@ -21,6 +23,15 @@ public:
 	Shader* dullShader = &dS;
 	Shader* lightShader = &lS;
 
+	struct time_block {
+		std::chrono::time_point<std::chrono::system_clock> timeUnit;
+		char timeString[30];
+		int ms = 0;
+	};
+
+	time_block sysTime;
+	time_block simTime;
+
 	// intializer
 	System(); // initializes main bodies, shaders / saved game?
 
@@ -31,9 +42,19 @@ public:
 
 	void shaderSet(); // should use list of all emission bodies and list of all diffuse bodies
 
-	void deleteBody(); // deletes bodies that aren't natural satellites
+	void deleteSystem(); // deletes shaders and clears memory for EOP
 
-	void deleteShaders(); // deletes shaders for EOP
+
+
+	// Time functions
+	// acquires and saves current system time to System variable
+	void SystemTime();
+
+	// function to handle 3 digit ms preservation
+	void time_block_ms_add(time_block &someTime, int sum);
+
+	// sets sim clock appropriate, takes warp speed into account
+	void WarpClockSet(int currWarp);
 };
 #endif 
  

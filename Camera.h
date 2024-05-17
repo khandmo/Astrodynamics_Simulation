@@ -10,6 +10,7 @@
 #include <glm/gtx/vector_angle.hpp>
 #include <vector>
 
+
 #include "Shaders.h"
 
 /*
@@ -37,6 +38,7 @@ public:
 	// for smooth mouse moves
 	bool firstClick = true;
 	bool firstPress = true;
+	std::vector<bool> keyRange;
 
 	int width;
 	int height;
@@ -53,6 +55,9 @@ public:
 	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos);
 
 	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii);
+
+	// handles press and release for robust button press recognition
+	bool keyPress(GLFWwindow* window, int key);
 };
 
 

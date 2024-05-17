@@ -7,6 +7,8 @@ Camera::Camera(int width, int height, glm::vec3 position) {
 	Camera::height = height;
 	Position = position;
 	OrigPos = position;
+	std::vector<bool> range(29, false);
+	keyRange = range;
 
 	// initialize focusDistSeg
 	focusDistSeg[0] = 1.25;
@@ -196,7 +198,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 		}
 	}
 
-	if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {  // toggle focus mode on camera
+	if (keyPress(window, GLFW_KEY_F)) {  // toggle focus mode on camera
 		focusMode = !focusMode;
 		if (focusMode == true) {
 			// reset focus parameters
@@ -208,7 +210,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 	}
 	if (focusMode) {
 		// scroll through object in focus
-		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) { // move backward through object list focus and preserve camera distance to body
+		if (keyPress(window, GLFW_KEY_A)) { // move backward through object list focus and preserve camera distance to body
 			if (focusBody == 0) {
 				focusBody = bodyPos.size() - 1;
 				focusPos *= (bodyRadii[focusBody] / bodyRadii[0]);
@@ -218,7 +220,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 				focusPos *= (bodyRadii[focusBody] / bodyRadii[focusBody + 1]);
 			}
 		}
-		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) { // move forward through object list focus and preserve camera distance to body
+		if (keyPress(window, GLFW_KEY_D)) { // move forward through object list focus and preserve camera distance to body
 			if (focusBody == bodyPos.size() - 1) {
 				focusBody = 0;
 				focusPos *= (bodyRadii[focusBody] / bodyRadii[bodyPos.size() - 1]);
@@ -229,17 +231,27 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 			}
 		}		
 		// focus mode zoom in / zoom out
-		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) { // zoom in
+		if (keyPress(window, GLFW_KEY_W)) { // zoom in
 			std::cout << focusDistMarker << '\n';
 			if (focusDistMarker > 0)
 				focusPos *= (focusDistSeg[focusDistMarker - 1] / focusDistSeg[focusDistMarker--]);
 		}
-		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) { // zoom out
+		if (keyPress(window, GLFW_KEY_S)) { // zoom out
 			std::cout << focusDistMarker << '\n';
 			if (focusDistMarker < 50)
 				focusPos *= (focusDistSeg[focusDistMarker + 1] / focusDistSeg[focusDistMarker++]);
 		}
 	}
+}
+
+
+bool Camera::keyPress(GLFWwindow* window, int key) {
+	if (glfwGetKey(window, key) == GLFW_PRESS) keyRange[key-65] = true;
+	if (glfwGetKey(window, key) == GLFW_RELEASE && keyRange[key-65]) {
+		keyRange[key-65] = false;
+		return true;
+	}
+	return false;
 }
 
 
