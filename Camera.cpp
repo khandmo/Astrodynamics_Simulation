@@ -7,7 +7,7 @@ Camera::Camera(int width, int height, glm::vec3 position) {
 	Camera::height = height;
 	Position = position;
 	OrigPos = position;
-	std::vector<bool> range(29, false);
+	std::vector<bool> range(29, false); // this numbering scheme only works A - ] (65-93)
 	keyRange = range;
 
 	// initialize focusDistSeg
@@ -181,7 +181,25 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) 
 	}
 }
 
-void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, std::vector<float> &bodyRadii) {
+void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, std::vector<float> &bodyRadii, bool& skyBox, int& dt) {
+	
+	if (keyPress(window, GLFW_KEY_P)) { // toggles skybox
+		skyBox = !skyBox;
+	}
+
+	if (keyPress(window, GLFW_KEY_RIGHT_BRACKET)) { // should modify the simulation time accordingly wtih dt = 1 == 1 second/second
+		if (dt < 30)
+			dt++;
+	}
+	else if (keyPress(window, GLFW_KEY_LEFT_BRACKET)) {
+		if (dt > 0)
+			dt--;
+	}
+
+	if (keyPress(window, GLFW_KEY_K)) {
+		dt = 16;
+	}
+	
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) { // cycle camera positions
 		// should change main body based on focus mode
 		if (cameraViewCycle == 0) { // top down

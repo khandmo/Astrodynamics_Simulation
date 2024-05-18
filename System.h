@@ -51,7 +51,7 @@ public:
 	void SystemTime();
 
 	// function to handle 3 digit ms preservation
-	void time_block_ms_add(time_block &someTime, int sum);
+	void time_block_ms_add(time_block &someTime, int sum, bool sign);
 
 	// sets sim clock appropriate, takes warp speed into account
 	void WarpClockSet(int currWarp);

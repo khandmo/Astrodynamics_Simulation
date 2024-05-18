@@ -54,7 +54,7 @@ public:
 	
 	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos);
 
-	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii);
+	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii, bool& skybox, int& dt);
 
 	// handles press and release for robust button press recognition
 	bool keyPress(GLFWwindow* window, int key);

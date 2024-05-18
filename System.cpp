@@ -110,7 +110,7 @@ void System::SystemTime() {
 	simTime = currTime;
 }
 
-void System::time_block_ms_add(time_block &someTime, int sum) {
+void System::time_block_ms_add(time_block &someTime, int sum, bool sign) {
 	if (sum > 1000) {
 		// throw exception for non three digit sum
 	}
@@ -123,11 +123,12 @@ void System::time_block_ms_add(time_block &someTime, int sum) {
 
 		// adds reverse remainder to the total sum
 		auto timeUnitT = std::chrono::system_clock::to_time_t((someTime.timeUnit));
-		timeUnitT += overAmt/1000;
+		sign == true ? timeUnitT += overAmt/1000 : timeUnitT -= overAmt/1000;
 		someTime.timeUnit = std::chrono::system_clock::from_time_t((timeUnitT));
 		ctime_s(someTime.timeString, sizeof(someTime.timeString), &timeUnitT);
 	}
 }
+
 
 
 void System::WarpClockSet(const int currWarp) {
@@ -142,10 +143,12 @@ void System::WarpClockSet(const int currWarp) {
 
 
 	if (diff.count() >= .2) {
+		bool sign;
+		currWarp > 0 ? sign = true : sign = false;
 		double diffWarp = diff.count() * currWarp;
 		if (currWarp < 5) { 
 			//update ms timing
-			time_block_ms_add(simTime, (int)(diffWarp*1000));
+			time_block_ms_add(simTime, (int)abs((diffWarp*1000)), sign);
 		}
 		// update with time warp multiplier
 		auto pastTimeUnit = std::chrono::system_clock::to_time_t((simTime.timeUnit));

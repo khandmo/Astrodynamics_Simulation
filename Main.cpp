@@ -52,8 +52,9 @@ int main() {
 
 	// set skybox and time float
 	bool skyboxOn = true;
-	int dtRange[15] = { 1, 2, 4, 8, 16, 32, 64, 100, 200, 500, 1000, 10000, 100000, 1000000, 10000000}; // fixed time warp range 1-10mil
-	int dt = 0; // current time warp index
+	int dtRange[31] = { -10000000, -1000000, -100000, -10000, -1000, -500, -200, -100, -64, -32, -16, -8, -4, -2, -1, 0, 
+		1, 2, 4, 8, 16, 32, 64, 100, 200, 500, 1000, 10000, 100000, 1000000, 10000000}; // fixed time warp range -10mil to 10mil
+	int dt = 16; // current time warp index
 	bool dtChange = false;
 	float clickPTime = glfwGetTime();
 	Sys.SystemTime();
@@ -69,21 +70,9 @@ int main() {
 		// input handling -  should add input for safe obliteration (cease while loop)
 		// for holding inputs
 		(camera).smoothInputs(window, Sys.bodyPos);
-		// for single click inputs
-		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii);
-
-		if (camera.keyPress(window, GLFW_KEY_P)) { // toggles skybox
-			skyboxOn = !skyboxOn;
-		}
-		// TW GETS TRIGGERED TOO EASILY
-		if (camera.keyPress(window, GLFW_KEY_RIGHT_BRACKET)) { // should modify the simulation time accordingly wtih dt = 1 == 1 second/second
-			if (dt < 14)
-				dt++;
-		}
-		else if (camera.keyPress(window, GLFW_KEY_LEFT_BRACKET)) {
-			if (dt > 0)
-				dt--;
-		}
+		// for single click inputs - must change dt bounds here if dtRange size changes
+		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, skyboxOn, dt);
+		
 		(camera).updateMatrix(45.0f, 0.1f, 6100.0f); // values to be able to see the sun from neptune
 
 		// Process time 
