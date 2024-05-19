@@ -39,7 +39,7 @@ public:
 	// render shadow maps
 	void ShadowRender(std::vector<Mesh*> &bodies, Camera* camera);
 	// move bodies
-	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, float dt);
+	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec);
 	// render skybox
 	void RenderSkyBox(Camera* camera);
 };

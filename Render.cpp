@@ -201,7 +201,7 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 		glBindVertexArray(0);*/
 }
 
-void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, float dt) {
+void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec) {
 	// dt is time step for orbit calculation - dt > 1 slows time by factor, dt < 1 speeds time by factor
 
 	// Every object that orbits must also have a rotate function, if it should not rotate set the first parameter to 0.0f
@@ -209,8 +209,8 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, fl
 
 	for (int i = 1; i < bodies.size(); i++) {
 		for (auto lBody : lBodies) {
-			(*bodies[i]).Rotate(lBody, dt);
-			(*bodies[i]).Orbit(lBody, dt);
+			(*bodies[i]).Rotate(lBody, simTime_sec);
+			(*bodies[i]).Orbit(lBody, simTime_sec);
 		}
 	}	
 }

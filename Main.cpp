@@ -43,13 +43,6 @@ int main() {
 	RenderSet Renderer(window, camera, width, height);
 	Renderer.set();
 
-	/* Buffer holds 3 digit weekday, month, date, hour:minute:second, year in system time
-	Can be adjusted for to UTC, but have to know personal time zone.Could put it in as input before simulation begins
-	*/
-
-
-
-
 	// set skybox and time float
 	bool skyboxOn = true;
 	int dtRange[31] = { -10000000, -1000000, -100000, -10000, -1000, -500, -200, -100, -64, -32, -16, -8, -4, -2, -1, 0, 
@@ -72,15 +65,15 @@ int main() {
 		(camera).smoothInputs(window, Sys.bodyPos);
 		// for single click inputs - must change dt bounds here if dtRange size changes
 		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, skyboxOn, dt);
-		
-		(camera).updateMatrix(45.0f, 0.1f, 6100.0f); // values to be able to see the sun from neptune
+		// values to be able to see the sun from neptune
+		(camera).updateMatrix(45.0f, 0.001f, 6100.0f); 
 
 		// Process time 
 		Sys.WarpClockSet(dtRange[dt]);
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
-		//Renderer.Move(Sys.bodies, Sys.lightBodies, dtRange[dt]); // should replace dtRange with simTime variable
+		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec); // should replace dtRange with simTime variable
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
 		}

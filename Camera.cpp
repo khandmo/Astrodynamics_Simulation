@@ -196,7 +196,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 			dt--;
 	}
 
-	if (keyPress(window, GLFW_KEY_K)) {
+	if (keyPress(window, GLFW_KEY_K)) { // killswitch for time warp
 		dt = 16;
 	}
 	

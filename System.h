@@ -24,9 +24,10 @@ public:
 	Shader* lightShader = &lS;
 
 	struct time_block {
-		std::chrono::time_point<std::chrono::system_clock> timeUnit;
-		char timeString[30];
-		int ms = 0;
+		std::chrono::time_point<std::chrono::system_clock> timeUnit; // holds the system clock 
+		char timeString[30]; // holds the string representation - DDD MMM DD HH:MM:SS YYYY
+		int ms = 0; // holds three digit fractional amount
+		double time_in_sec = 0; // holds clock time in seconds since UNIX epoch - Jan 1 1970
 	};
 
 	time_block sysTime;

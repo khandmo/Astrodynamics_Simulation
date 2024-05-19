@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "Textures.h"
 #include "Shaders.h"
+#include "SpiceUsr.h"
 
 /*
 Mesh holds all physical data about an object including the model data, whether or not it is a light source or a ring system,
@@ -75,13 +76,13 @@ public:
 	void Draw(Camera& camera);
 
 	// rotates body at speed on specific axis and assigns light shader appropriately
-	void Rotate(Mesh* lightSource, float dt);
+	void Rotate(Mesh* lightSource, double UTCTime);
 
 	// rotates model along x axis by degree given
 	void AxialTilt(GLfloat tiltDeg);
 
 	// calculate orbital position
-	void Orbit(Mesh* lightSource, float dt);  // MIGHT HAVE TO HOLD VELOCITY AND PARENT SOURCE AS MESH PROPERTY, GET LIGHT SOURCES FROM SYSTEM
+	void Orbit(Mesh* lightSource, double UTCTime);  // MIGHT HAVE TO HOLD VELOCITY AND PARENT SOURCE AS MESH PROPERTY, GET LIGHT SOURCES FROM SYSTEM
 
 	// update model position and orientation
 	void updateModel(Mesh& source);

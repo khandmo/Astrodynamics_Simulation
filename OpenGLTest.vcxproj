@@ -78,6 +78,8 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>A:\Code\C++\Astrodynamics-Simulation\Libraries\include;A:\Code\C++\Astrodynamics-Simulation\cspice\include;$(IncludePath)</IncludePath>
     <LibraryPath>A:\Code\C++\Astrodynamics-Simulation\Libraries\lib;A:\Code\C++\Astrodynamics-Simulation\cspice\lib;$(LibraryPath)</LibraryPath>
+    <SourcePath>A:\Code\C++\Astrodynamics-Simulation\cspice\src;$(SourcePath)</SourcePath>
+    <ExecutablePath>A:\Code\C++\Astrodynamics-Simulation\cspice\exe;$(ExecutablePath)</ExecutablePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -118,7 +120,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>glfw3.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;cspice.lib;csupport.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
