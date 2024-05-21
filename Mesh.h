@@ -23,6 +23,8 @@ public:
 	GLuint depthMap = 0;
 	Mesh* gravSource; // body whose SOI this body is currently in / body which exerts the greatest grav field on body in solar system
 	int soiID; // sphere of influence identification for 2 body equations
+	int spiceID;
+	int baryID;
 
 	bool isLightSource;
 	bool areRings;
@@ -55,7 +57,7 @@ public:
 
 
 
-	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, GLfloat objMass);
+	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx);
 
 	// sets shader program for depth map
 	void setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix);

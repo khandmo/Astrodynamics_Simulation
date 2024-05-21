@@ -68,7 +68,7 @@ void Object::Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat gr
 	const int divisions = 512;
 	Vertex ringV[6 * divisions] = {};
 	// add outerRad, two innerRad, two outerRad, second innerRad, ...
-	float constAngleDiv = 2 * glm::pi<float>() / divisions;
+	float constAngleDiv = (2 * glm::pi<float>()) / divisions;
 
 	// r is given by appropriate radii, theta is 0, phi is the angles
 	glm::vec3 vPos;

@@ -5,17 +5,17 @@ System::System() {
 
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
 	// initialize radius as true radius in km divided by a factor of 6100/4550000000 to be consistent with orbital distances
-	bodiesActual.push_back(initBody("sun", "Textures/SQmercury.jpg", glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), 10.0f, 0.9335547255f, 0.0f, 0.0f, 0.0f, true, false, -1)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
-	//bodiesActual.push_back(initBody("mercury", "Textures/SQmercury.jpg", glm::vec3(61.4f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.429f), 0.00001651f, 0.0032708066f, 0.0f, 2, 0.0600068844f, false, false, 0));
-	//bodiesActual.push_back(initBody("venus", "Textures/SQvenus.jpg", glm::vec3(143.6f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.2641f), 0.00002447f, 0.0081134022f, 0.0f, 3, 0.0434617764f, false, false, 0));
-	bodiesActual.push_back(initBody("earth", "Textures/earth4096.jpg", glm::vec3(200.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.2238f), 0.000030027f, 0.0085413407f, 0.0f, 23.5, 10.56121166f, false, false, 0));
-	bodiesActual.push_back(initBody("moon", "Textures/moon4096.jpg", glm::vec3(205.229f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0010275268), 0.00004f, 0.00232926115f, 0.0f, 1.5, 0.35800717f, false, false, 1));
-	//bodiesActual.push_back(initBody("mars", "Textures/SQmars.jpg", glm::vec3(276.28f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.190251f), 0.00003213f, 0.0045441648f, 0.0f, 25, 10.57f, false, false, 0));
-	//bodiesActual.push_back(initBody("jupiter", "Textures/SQjupiter.jpg", glm::vec3(990.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.1004081f), 0.009546f, 0.0937268352f, 0.0f, 3, 25.64f, false, false, 0));
-	//bodiesActual.push_back(initBody("saturn", "Textures/SQsaturn.jpg", glm::vec3(1808.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0743493f), 0.002857f, 0.0780692747f, 0.0f, 26.73, 23.6886f, false, false, 0));
-	//bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", glm::vec3(1808.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0743493f), 0.002857f, 0.1880945055f, 1.94745f, 26.73, 21.0f, false, true, 0)); 
-	//bodiesActual.push_back(initBody("uranus", "Textures/SQuranus.jpg", glm::vec3(3680.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0521264f), 0.0004365f, 0.0340018022f, 0.0f, 97.7, 14.6939f, false, false, 0));
-	//bodiesActual.push_back(initBody("neptune", "Textures/SQneptune.jpg", glm::vec3(5962.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.04095276f), 0.0005149f, 0.0330097143f, 0.0f, 28, 15.8418f, false, false, 0));
+	bodiesActual.push_back(initBody("sun", "Textures/SQmercury.jpg", glm::vec3(0.0f, 0.0f, 0.0f), 0.9335547255f, 0.0f, 0.0f, 0.0f, true, false, -1, 10, 10)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
+	bodiesActual.push_back(initBody("mercury", "Textures/SQmercury.jpg", glm::vec3(61.4f, 0.0f, 0.0f), 0.0032708066f, 0.0f, 2, 0.0600068844f, false, false, 0, 1, 199));
+	bodiesActual.push_back(initBody("venus", "Textures/SQvenus.jpg", glm::vec3(143.6f, 0.0f, 0.0f), 0.0081134022f, 0.0f, 3, 0.0434617764f, false, false, 0, 2, 299));
+	bodiesActual.push_back(initBody("earth", "Textures/earth4096.jpg", glm::vec3(200.0f, 0.0f, 0.0f), 0.0085413407f, 0.0f, 23.5, 10.56121166f, false, false, 0, 3, 399));
+	bodiesActual.push_back(initBody("moon", "Textures/moon4096.jpg", glm::vec3(205.229f, 0.0f, 0.0f), 0.00232926115f, 0.0f, 1.5, 0.35800717f, false, false, 3, 301, 301));
+	bodiesActual.push_back(initBody("mars", "Textures/SQmars.jpg", glm::vec3(276.28f, 0.0f, 0.0f), 0.0045441648f, 0.0f, 25, 10.57f, false, false, 0, 4, 499));
+	bodiesActual.push_back(initBody("jupiter", "Textures/SQjupiter.jpg", glm::vec3(990.0f, 0.0f, 0.0f), 0.0937268352f, 0.0f, 3, 25.64f, false, false, 0, 5, 599));
+	bodiesActual.push_back(initBody("saturn", "Textures/SQsaturn.jpg", glm::vec3(1808.0f, 0.0f, 0.0f), 0.0780692747f, 0.0f, 26.73, 23.6886f, false, false, 0, 6, 699));
+	bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", glm::vec3(1808.0f, 0.0f, 0.0f), 0.1005494506f, 0.1876923077f, 26.73, 21.0f, false, true, 0, 6, 699)); 
+	bodiesActual.push_back(initBody("uranus", "Textures/SQuranus.jpg", glm::vec3(3680.0f, 0.0f, 0.0f), 0.0340018022f, 0.0f, 97.7, 14.6939f, false, false, 0, 7, 799));
+	bodiesActual.push_back(initBody("neptune", "Textures/SQneptune.jpg", glm::vec3(5962.0f, 0.0f, 0.0f), 0.0330097143f, 0.0f, 28, 15.8418f, false, false, 0, 8, 899));
 	
 	// transplant bodies addresses
 	for (int i = 0; i < bodiesActual.size(); i++) {
@@ -40,7 +40,7 @@ System::System() {
 	updateBodyState(); // shaders stable here
 }
 
-Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, glm::vec3 vel, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot,  bool isLight, bool areRings, int soiID) {
+Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, float radius, float outerRadius, float axialTilt, float angleOfRot,  bool isLight, bool areRings, int soiID, int baryID, int spiceID) {
 	
 	// init texture
 	Texture tex[] = { Texture(texFilePath, "diffuse", 0, GL_RGB, GL_UNSIGNED_BYTE) };
@@ -61,12 +61,11 @@ Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, 
 		shader = lS;
 	}
 
-	Mesh body(name, obj.vertices, obj.indices, objTex, isLight, areRings, lightColor, pos, &shader, mass); // velocity will be updated with SPICE integration
+	Mesh body(name, obj.vertices, obj.indices, objTex, isLight, areRings, lightColor, pos, &shader, baryID, spiceID); // velocity will be updated with SPICE integration
 
 	// Set Properties
 	body.soiID = soiID;
 	body.AxialTilt(axialTilt);
-	body.Vel = vel; // assign body velocity
 	body.radRot = angleOfRot; // assign rotation speed
 	bodyRadii.push_back(radius);
 

@@ -13,7 +13,7 @@ int main() {
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// could change dynamically
-	int width = 1400; int height = 1400;
+	int width = 1200; int height = 1200;
 
 	// window init takes width, height, name, fullscreen or not,?
 	GLFWwindow* window = glfwCreateWindow(width, height, "AstroDynPro", NULL, NULL);
