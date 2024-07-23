@@ -1,5 +1,7 @@
 #include "Mesh.h"
 
+#define UTC2J2000	946684800
+
 Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx){
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
@@ -14,7 +16,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 
 	// initialize all kernels here, once
 	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
-	furnsh_c("pck00011.tpc"); // for axial orientation (spiceID)
+	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 
 	// set object light emission color if any
 	if (isLight == true) {
@@ -25,6 +27,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	glm::mat4 objModel = glm::mat4(1.0f);
 	objModel = glm::translate(objModel, Pos); 
 	Mesh::Model = objModel;
+
 
 	// set object shader program
 	Mesh::ShaderProgram = *shaderProgram;
@@ -131,19 +134,40 @@ void Mesh::Draw(Camera& camera) {
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 }
 
-void Mesh::Rotate(Mesh* lightSource, double UTCtime) { // stays the same, updated radRot by dt with scaling factor only
+void Mesh::Rotate(Mesh* lightSource, double UTCtime) { 
+	// use PM to set axial rotation angle in radians
+	
+	/*
+	If generate rotation with approximation, need to pass dt to Renderer Move that
+	calls for this function on each loop
+	*/
+	
 	// transforms model matrix by rotation
 	Model = glm::rotate(Model, 2.0f * glm::pi<float>() * radRot, Up);
-	//currAngleRad += 2.0f * glm::pi<float>() * 0.0600068844f / dt;
+	currAngleRad += 2.0f * glm::pi<float>() * 0.0600068844f / 40; // arbitrary testing constant
 	// redraws the shader for modified model
 	dullShader(*lightSource);
 }
 
 void Mesh::AxialTilt(GLfloat tiltDeg) {
-	// rotate model by cross product of Up and tiltDir and rotate but radians of tilt itself
-	// will need to translate angles to the correct variables
+	SpiceDouble ra[3], dec[3], w[3], lambda[1];
+	// the first constant in each of above is sufficient for the time scales of this program
+	SpiceInt dim;
+	bodvcd_c(spiceID, "POLE_RA", 3, &dim, ra);
+	bodvcd_c(spiceID, "POLE_DEC", 3, &dim, dec);
+	bodvcd_c(spiceID, "PM", 3, &dim, w);
+	//bodvcd_c(spiceID, "LONG_AXIS", 1, &dim, lambda);
 
-	Model = glm::rotate(Model, glm::radians(tiltDeg), glm::vec3(1.0f, 0.0f, 0.0f));
+	SpiceDouble range = 1, rectan[3];
+
+	radrec_c(range, ra[0], dec[0], rectan); // turns ra & dec to rectangular coords
+	double poleCoords[3];
+	poleCoords[0] = rectan[1]; poleCoords[1] = rectan[2]; poleCoords[2] = rectan[0];
+	glm::vec3 poleVec = glm::vec3(poleCoords[0], poleCoords[1], poleCoords[2]);
+	poleVec = glm::rotateY(poleVec, glm::radians(-23.4f)); // north pole vector in correct frame
+
+
+	Model = glm::rotate(Model, glm::radians(tiltDeg), glm::cross(Up, poleVec));
 	axisTiltDegree = tiltDeg;
 }
 
@@ -153,7 +177,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime) {
 
 	SpiceDouble state[6];
 	SpiceDouble lt;
-	double et = UTCtime - 946684800; // UTC to J2000
+	double et = UTCtime - UTC2J2000; // UTC to J2000
 	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", "10", state, &lt);
 
 	// Positions scaled by largest possible distance from neptune to the sun
@@ -207,7 +231,7 @@ void Mesh::updateModel(Mesh& source) {
 	glm::mat4 objModel = glm::mat4(1.0f);
 	Model = glm::translate(objModel, Pos);
 
-	//Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::vec3(1.0f, 0.0f, 0.0f));
-	//Model = glm::rotate(Model, currAngleRad, Up);
+	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::vec3(1.0f, 0.0f, 0.0f));
+	Model = glm::rotate(Model, currAngleRad, Up);
 }
 
