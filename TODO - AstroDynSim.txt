@@ -13,7 +13,7 @@ Axial Tilt (Set axial tilt in mesh currRotAxis, rotate model vertices too)
 Saturnian ring system
 --- Partial Solution - Solar System Complete - XXX
 Outer planet shader glitching (saturn + rings + uranus + neptune)
-Ephemerides Axis Implement
+x Ephemerides Axis Implement
 Orbital Lines - Alpha blending
 x Ephemerides and Date/Time Implementation - no more equations of motion
 More Moons

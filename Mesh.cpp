@@ -135,28 +135,31 @@ void Mesh::Draw(Camera& camera) {
 }
 
 void Mesh::Rotate(Mesh* lightSource, double UTCtime) { 
-	// use PM to set axial rotation angle in radians
+	// PM position only helpful w/ planet rotation speed
 	
 	/*
 	If generate rotation with approximation, need to pass dt to Renderer Move that
 	calls for this function on each loop
 	*/
-	
+	SpiceDouble w[3];
+	SpiceInt dim;
+	bodvcd_c(spiceID, "PM", 3, &dim, w); // this angle is equivalent to the rotation angle, no need for rotation rates to be preprogrammed
+
+	float angle = glm::radians((float)w[0] + w[1] * (UTCtime / 86400)) + 1;
 	// transforms model matrix by rotation
-	Model = glm::rotate(Model, 2.0f * glm::pi<float>() * radRot, Up);
-	currAngleRad += 2.0f * glm::pi<float>() * 0.0600068844f / 40; // arbitrary testing constant
+	Model = glm::rotate(Model, angle, Up);
+	currAngleRad = angle;
+		//2.0f * glm::pi<float>() * 0.0600068844f / 40; // arbitrary testing constant
 	// redraws the shader for modified model
 	dullShader(*lightSource);
 }
 
 void Mesh::AxialTilt(GLfloat tiltDeg) {
-	SpiceDouble ra[3], dec[3], w[3], lambda[1];
+	SpiceDouble ra[3], dec[3], lambda[1];
 	// the first constant in each of above is sufficient for the time scales of this program
 	SpiceInt dim;
 	bodvcd_c(spiceID, "POLE_RA", 3, &dim, ra);
 	bodvcd_c(spiceID, "POLE_DEC", 3, &dim, dec);
-	bodvcd_c(spiceID, "PM", 3, &dim, w);
-	//bodvcd_c(spiceID, "LONG_AXIS", 1, &dim, lambda);
 
 	SpiceDouble range = 1, rectan[3];
 
