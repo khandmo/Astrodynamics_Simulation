@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "Textures.h"
 #include "Shaders.h"
+#include "SpiceUsr.h"
 
 /*
 Mesh holds all physical data about an object including the model data, whether or not it is a light source or a ring system,
@@ -22,6 +23,8 @@ public:
 	GLuint depthMap = 0;
 	Mesh* gravSource; // body whose SOI this body is currently in / body which exerts the greatest grav field on body in solar system
 	int soiID; // sphere of influence identification for 2 body equations
+	int spiceID;
+	int baryID;
 
 	bool isLightSource;
 	bool areRings;
@@ -54,7 +57,7 @@ public:
 
 
 
-	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, GLfloat objMass);
+	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx);
 
 	// sets shader program for depth map
 	void setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix);
@@ -75,13 +78,13 @@ public:
 	void Draw(Camera& camera);
 
 	// rotates body at speed on specific axis and assigns light shader appropriately
-	void Rotate(Mesh* lightSource, float dt);
+	void Rotate(Mesh* lightSource, double UTCTime);
 
 	// rotates model along x axis by degree given
 	void AxialTilt(GLfloat tiltDeg);
 
 	// calculate orbital position
-	void Orbit(Mesh* lightSource, float dt);  // MIGHT HAVE TO HOLD VELOCITY AND PARENT SOURCE AS MESH PROPERTY, GET LIGHT SOURCES FROM SYSTEM
+	void Orbit(Mesh* lightSource, double UTCTime);  // MIGHT HAVE TO HOLD VELOCITY AND PARENT SOURCE AS MESH PROPERTY, GET LIGHT SOURCES FROM SYSTEM
 
 	// update model position and orientation
 	void updateModel(Mesh& source);

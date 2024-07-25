@@ -10,6 +10,7 @@
 #include <glm/gtx/vector_angle.hpp>
 #include <vector>
 
+
 #include "Shaders.h"
 
 /*
@@ -22,8 +23,9 @@ public:
 	int cameraViewCycle = 0;
 	bool focusMode = false;
 	int focusBody = 0;
-	float focusDistMult = 1.0f;
 	glm::vec3 focusPos = glm::vec3(3.0f, 0.0f, 0.0f);
+	float focusDistSeg[50];
+	int focusDistMarker = 20;
 
 	glm::vec3 Position;
 	glm::vec3 OrigPos;
@@ -36,6 +38,7 @@ public:
 	// for smooth mouse moves
 	bool firstClick = true;
 	bool firstPress = true;
+	std::vector<bool> keyRange;
 
 	int width;
 	int height;
@@ -51,7 +54,10 @@ public:
 	
 	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos);
 
-	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos);
+	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii, bool& skybox, int& dt);
+
+	// handles press and release for robust button press recognition
+	bool keyPress(GLFWwindow* window, int key);
 };
 
 

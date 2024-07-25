@@ -12,11 +12,14 @@ Change default frag so light drop off reaches far away planets / lsMatrix follow
 Axial Tilt (Set axial tilt in mesh currRotAxis, rotate model vertices too) 
 Saturnian ring system
 --- Partial Solution - Solar System Complete - XXX
+Outer planet shader glitching (saturn + rings + uranus + neptune)
+x Ephemerides Axis Implement
 Orbital Lines - Alpha blending
-Ephemerides and Date/Time Implementation - no more equations of motion
+x Ephemerides and Date/Time Implementation - no more equations of motion
 More Moons
 GUI overlay
 Spacecraft object implementation / give each body gravity and calculate forces on spacecraft due to positions
 Visual - Trajectory and gravitational boundaries
 GUI - On the fly Trajectory manipulation ( mass / velocity change )
+Memory Leak Hunting - write destructors for everything!
 Finishing touches - Earth (night lights / cloud) texture overlay

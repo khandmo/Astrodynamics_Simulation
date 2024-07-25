@@ -1,6 +1,8 @@
 #include "Mesh.h"
 
-Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, GLfloat objMass){
+#define UTC2J2000	946684800
+
+Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx){
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
 	Mesh::indices = indices;
@@ -9,9 +11,12 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	Mesh::isLightSource = isLight;
 	Mesh::Pos = objPos;
 	Mesh::oPos = Pos;
-	Mesh::sphPos = Pos;
-	Mesh::mass = objMass;
+	Mesh::spiceID = spiceIDx;
+	Mesh::baryID = baryIDx;
 
+	// initialize all kernels here, once
+	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
+	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 
 	// set object light emission color if any
 	if (isLight == true) {
@@ -22,6 +27,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	glm::mat4 objModel = glm::mat4(1.0f);
 	objModel = glm::translate(objModel, Pos); 
 	Mesh::Model = objModel;
+
 
 	// set object shader program
 	Mesh::ShaderProgram = *shaderProgram;
@@ -128,55 +134,68 @@ void Mesh::Draw(Camera& camera) {
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
 }
 
-void Mesh::Rotate(Mesh* lightSource, float dt) {
+void Mesh::Rotate(Mesh* lightSource, double UTCtime) { 
+	// PM position only helpful w/ planet rotation speed
+	
+	/*
+	If generate rotation with approximation, need to pass dt to Renderer Move that
+	calls for this function on each loop
+	*/
+	SpiceDouble w[3];
+	SpiceInt dim;
+	bodvcd_c(spiceID, "PM", 3, &dim, w); // this angle is equivalent to the rotation angle, no need for rotation rates to be preprogrammed
+
+	float angle = glm::radians((float)w[0] + w[1] * (UTCtime / 86400)) + 1;
 	// transforms model matrix by rotation
-	Model = glm::rotate(Model, 2.0f * glm::pi<float>() * radRot / dt, Up);
-	currAngleRad += 2.0f * glm::pi<float>() * 0.0600068844f / dt;
+	Model = glm::rotate(Model, angle, Up);
+	currAngleRad = angle;
+		//2.0f * glm::pi<float>() * 0.0600068844f / 40; // arbitrary testing constant
 	// redraws the shader for modified model
 	dullShader(*lightSource);
 }
 
 void Mesh::AxialTilt(GLfloat tiltDeg) {
-	// rotate model by cross product of Up and tiltDir 
-	Model = glm::rotate(Model, glm::radians(tiltDeg), glm::vec3(1.0f, 0.0f, 0.0f));
+	SpiceDouble ra[3], dec[3], lambda[1];
+	// the first constant in each of above is sufficient for the time scales of this program
+	SpiceInt dim;
+	bodvcd_c(spiceID, "POLE_RA", 3, &dim, ra);
+	bodvcd_c(spiceID, "POLE_DEC", 3, &dim, dec);
+
+	SpiceDouble range = 1, rectan[3];
+
+	radrec_c(range, ra[0], dec[0], rectan); // turns ra & dec to rectangular coords
+	double poleCoords[3];
+	poleCoords[0] = rectan[1]; poleCoords[1] = rectan[2]; poleCoords[2] = rectan[0];
+	glm::vec3 poleVec = glm::vec3(poleCoords[0], poleCoords[1], poleCoords[2]);
+	poleVec = glm::rotateY(poleVec, glm::radians(-23.4f)); // north pole vector in correct frame
+
+
+	Model = glm::rotate(Model, glm::radians(tiltDeg), glm::cross(Up, poleVec));
 	axisTiltDegree = tiltDeg;
 }
 
-void Mesh::Orbit(Mesh* lightSource, float dt) {
+void Mesh::Orbit(Mesh* lightSource, double UTCtime) {
 
-	// if object has fallen into the sun leave it there
-	if (sphPos.x < 0) {
-		h = 0;
-		sphPos.x = 0;
-	}
+	// SPICE TO MODIFY Pos vector
 
-	long double c2 = pow(299792458, 2);
-	// if initialization factors uninitilialized, calculate them
-	if (redMass == 0) {
-		std::cout << name << ": " << std::endl;
-		Pos = Pos - gravSource->Pos;
-		sphPos = glm::vec3(glm::length(Pos), glm::acos(Pos.y / glm::length(Pos)), ((Pos.x / sqrt(Pos.x * Pos.x)) * glm::acos(Pos.z / sqrt(Pos.z * Pos.z + Pos.x * Pos.x))));
-		redMass = (1.0f / ((1.0f / mass) + (1.0f / gravSource->mass)));
-		h = glm::length(glm::cross(Pos, (mass * Vel))) / redMass;
-		std::cout << "h  is " << h << " L is " << h * mass << std::endl;
-		std::cout << "objVelocity is " << length(Vel) << std::endl;
-		std::cout << "stable circular angular velocity is " << sqrt(gravSource->mass * sphPos.x) * redMass << std::endl; // angular velocity L
-		epsilon = (3 * gravSource->mass * gravSource->mass) / (h * h);
-		ecc = (((h * h) / (gravSource->mass * sphPos.x)) - 1) / cos(sphPos.z * (1 - epsilon));
-		std::cout << "eccentricity is " << ecc << std::endl;
-	}
+	SpiceDouble state[6];
+	SpiceDouble lt;
+	double et = UTCtime - UTC2J2000; // UTC to J2000
+	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", "10", state, &lt);
 
-	// 2 - body relativistic equations
-	float dPhi = h / (sphPos.x * sphPos.x);
-	sphPos.z += dPhi / dt; // note sphPos.z does not reset after 2pi, it numerically continues to grow during the sim
-	sphPos.x = pow((gravSource->mass / (h * h)) * (1 + ecc * cos(sphPos.z * (1 - epsilon))), -1);
+	// Positions scaled by largest possible distance from neptune to the sun
+	double largestDistance = 4550000000;
+	// use same formula for calculating proprtionate radii, recall OpenGL coordinate system is analogous to cartesian by (y, z, x)
+	Pos.x = (state[0] * 6100 / largestDistance);
+	Pos.y = (state[1] * 6100 / largestDistance);
+	Pos.z = (state[2] * 6100 / largestDistance);
 
-	// inclination implementation would involve sinusoidal variation of sphPos.y based on sphPos.z
-	
+	// rotate positions on x-axis negative 23.4 degrees to get eccliptic as a flat plane
+	glm::vec3 posVec = glm::vec3(Pos.x, Pos.y, Pos.z);
+	posVec = glm::rotateX(posVec, glm::radians(-23.4f));
+	Pos.x = posVec.y; Pos.y = posVec.z; Pos.z = posVec.x;
 
-	// turn back into cartesian
-	Pos = glm::vec3(sphPos.x * sin(sphPos.y) * sin(sphPos.z), sphPos.x * cos(sphPos.y), sphPos.x * sin(sphPos.y) * cos(sphPos.z));
-	Pos += gravSource->Pos;
+
 
 	// if object are rings, meshes normals must be flipped when the sun crosses the ring plane (z-axis turning points)
 	if (areRings) { // below assumes the starting position is at z = 0
@@ -218,3 +237,4 @@ void Mesh::updateModel(Mesh& source) {
 	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::vec3(1.0f, 0.0f, 0.0f));
 	Model = glm::rotate(Model, currAngleRad, Up);
 }
+
