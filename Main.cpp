@@ -73,7 +73,7 @@ int main() {
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
-		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec); // should replace dtRange with simTime variable
+		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec);
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
 		}

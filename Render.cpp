@@ -106,7 +106,7 @@ void RenderSet::set() {
 	//debug.Activate();
 	//glUniform1i(glGetUniformLocation(debug.ID, "depthMap"), 0);
 
-}
+	}
 
 void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 	// activate shadow shader with above matrix
@@ -202,8 +202,6 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 }
 
 void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec) {
-	// dt is time step for orbit calculation - dt > 1 slows time by factor, dt < 1 speeds time by factor
-
 	// Every object that orbits must also have a rotate function, if it should not rotate set the first parameter to 0.0f
 	// Object will not be drawn if both functions are not present
 
@@ -211,6 +209,7 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, do
 		for (auto lBody : lBodies) {
 			(*bodies[i]).Rotate(lBody, simTime_sec);
 			(*bodies[i]).Orbit(lBody, simTime_sec);
+			renderLine(lineProgram, (*bodies[i]).pathVBO, (*bodies[i]).numPathPoints, glm::mat4(1.0f), glm::lookAt(glm::vec3(0.0f), (*camera).Orientation, (*camera).Up), (*camera).proj);
 		}
 	}	
 }

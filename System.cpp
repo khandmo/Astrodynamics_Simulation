@@ -2,7 +2,6 @@
 
 
 System::System() {
-
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
 	// initialize radius as true radius in km divided by a factor of 6100/4550000000 to be consistent with orbital distances
 	bodiesActual.push_back(initBody("sun", "Textures/SQmercury.jpg", glm::vec3(0.0f, 0.0f, 0.0f), 0.9335547255f, 0.0f, 0.0f, 0.0f, true, false, -1, 10, 10)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
@@ -61,7 +60,8 @@ Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, 
 		shader = lS;
 	}
 
-	Mesh body(name, obj.vertices, obj.indices, objTex, isLight, areRings, lightColor, pos, &shader, baryID, spiceID); // velocity will be updated with SPICE integration
+	SystemTime();
+	Mesh body(name, obj.vertices, obj.indices, objTex, isLight, areRings, lightColor, pos, &shader, baryID, spiceID, sysTime.time_in_sec); // velocity will be updated with SPICE integration
 
 	// Set Properties
 	body.soiID = soiID;

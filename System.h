@@ -18,6 +18,7 @@ public:
 	std::vector<glm::vec3*> bodyPos; // for camera interface
 	std::vector <float> bodyRadii; // for camera
 
+
 	Shader dS = Shader("default.vert", "default.frag");
 	Shader lS = Shader("light.vert", "light.frag");
 	Shader* dullShader = &dS;

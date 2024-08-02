@@ -8,6 +8,7 @@
 #include "Textures.h"
 #include "Shaders.h"
 #include "SpiceUsr.h"
+#include "Line.h"
 
 /*
 Mesh holds all physical data about an object including the model data, whether or not it is a light source or a ring system,
@@ -35,6 +36,8 @@ public:
 	glm::vec3 sphPos;
 	glm::vec3 Vel; // world velocity
 	glm::mat4 Model;
+	GLuint pathVBO; // for trajectory lines
+	int numPathPoints; // num of data pts for trajectory lines
 	bool sign = false; // if rings, checks to see if sun has crossed ring plane
 
 	GLfloat mass;
@@ -57,7 +60,7 @@ public:
 
 
 
-	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx);
+	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx, double UTCtime);
 
 	// sets shader program for depth map
 	void setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix);
@@ -88,6 +91,10 @@ public:
 
 	// update model position and orientation
 	void updateModel(Mesh& source);
+
+
+
+	// return functions to call for attributes below
 
 	
 };

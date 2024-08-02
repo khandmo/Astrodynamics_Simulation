@@ -26,6 +26,7 @@ public:
 	GLuint depthMap;
 	glm::mat4 lightSpaceMatrix = glm::mat4(1.0f);
 	Shader shadowProgram = Shader("depth.vert", "depth.frag");
+	Shader lineProgram = Shader("line.vert", "line.frag");
 	Shader debug = Shader("debug.vert", "debug.frag");
 
 	unsigned int skyboxVAO = 0, skyboxVBO = 0;

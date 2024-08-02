@@ -38,6 +38,9 @@
     <ClCompile Include="Textures.cpp">
       <Filter>Modules</Filter>
     </ClCompile>
+    <ClCompile Include="Line.cpp">
+      <Filter>Modules</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EBO.h">
@@ -70,6 +73,9 @@
     <ClInclude Include="Textures.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="Line.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="debug.frag">
@@ -100,6 +106,12 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="skybox.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="line.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="line.frag">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

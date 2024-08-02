@@ -2,7 +2,9 @@
 
 #define UTC2J2000	946684800
 
-Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx){
+double distanceFind(std::vector<double> pt1, std::vector<double> pt2);
+
+Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader* shaderProgram, int baryIDx, int spiceIDx, double UTCtime) {
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
 	Mesh::indices = indices;
@@ -25,7 +27,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 
 	// set object model position
 	glm::mat4 objModel = glm::mat4(1.0f);
-	objModel = glm::translate(objModel, Pos); 
+	objModel = glm::translate(objModel, Pos);
 	Mesh::Model = objModel;
 
 
@@ -55,6 +57,85 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	VAO.Unbind();
 	VBO.Unbind();
 	EBO.Unbind();
+
+	// Determine set of points for orbital path drawing and set them in a VBO for each Mesh to hold
+	// uniquely
+
+	// need to detect a full orbit (return to pt OR orbital period calculation)
+	// return to pt would work for spacecraft imp too, worth trying
+
+	// conversions
+	int hour = 60 * 60;
+	int day = hour * 24;
+	int month = day * 30;
+	int passed = 0;
+	int hit = 0;
+	int done = 0;
+	int distance = 0; // best distance to initial pt
+	double newD;
+
+	if (name != "sun") {
+		SpiceDouble state[6], newState[6];
+		SpiceDouble lt;
+		double et = UTCtime - UTC2J2000; // UTC to J2000
+		spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", "10", state, &lt);
+		std::vector<double> initPos = { state[0], state[1], state[2] };
+
+		// should transcribe the points to be used and the parameters (so the code will change automatically upon revision)
+		// into a .txt file to read from since these values don't change, just generate them from number of orbital subdivisions
+
+		while (!done) {
+			if (!passed) {
+				et += month;
+				spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", "10", newState, &lt);
+				newD = distanceFind(initPos, std::vector<double> { newState[0], newState[1], newState[2] });
+				if (newD < distance) {
+					passed = !passed;
+				}
+				distance = newD;
+			}
+			else if (passed && !hit) {
+				et += month;
+				spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", "10", newState, &lt);
+				newD = distanceFind(initPos, std::vector<double> { newState[0], newState[1], newState[2] });
+				if (newD > distance) {
+					hit = !hit;
+				}
+				distance = newD;
+			}
+			else if (passed && hit) { // backstep doesn't occur enough times/satisfied early 
+				et -= day;
+				spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", "10", newState, &lt);
+				newD = distanceFind(initPos, std::vector<double> { newState[0], newState[1], newState[2] });
+				if (newD > distance)
+					done = !done;
+			}
+			distance = newD;
+		}
+		et += day; // corrects last period check
+		// now have orbital period between et & UTCtime - UTC2J2000 that can be subdivided, pts added to vector and saved in a .txt file
+		// path points have to be modified for distance proportions and axis modifcation!!!!!!!!
+		int numPts = 200;
+		numPathPoints = numPts;
+		std::vector<glm::vec3> orbit;
+		double tPt = UTCtime - UTC2J2000;
+		// check for txt file existence, verify numPts is the same, if not overwrite txt file during for loop
+		std::cout << "orbital period " << (et - tPt) / day << '\n';
+		for (int i = 0; i < numPts; i++) {
+			tPt += (et - UTCtime + UTC2J2000) / numPts;
+			spkezr_c(std::to_string(baryID).c_str(), tPt, "J2000", "NONE", "10", newState, &lt);
+			orbit.push_back(glm::vec3{ newState[0], newState[1], newState[2] });
+			std::cout << tPt << "\t" << orbit.size() << '\n';
+		}
+		pathVBO = setLine(orbit); // set VBO with path list
+
+
+		// might need to add the first pt at the end so that it connects
+		// might need to extend the outer planets with orbits too large to calculate time-wise with simple predictive arcs
+		// until emphersis data expires, though they'd have to propogate back in time too
+		// can forsee saturn+ having this issue and should extend loops as far as possible
+		// text file will shorten boot times
+	}	
 }
 
 void Mesh::setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix) {
@@ -135,17 +216,11 @@ void Mesh::Draw(Camera& camera) {
 }
 
 void Mesh::Rotate(Mesh* lightSource, double UTCtime) { 
-	// PM position only helpful w/ planet rotation speed
-	
-	/*
-	If generate rotation with approximation, need to pass dt to Renderer Move that
-	calls for this function on each loop
-	*/
 	SpiceDouble w[3];
 	SpiceInt dim;
 	bodvcd_c(spiceID, "PM", 3, &dim, w); // this angle is equivalent to the rotation angle, no need for rotation rates to be preprogrammed
 
-	float angle = glm::radians((float)w[0] + w[1] * (UTCtime / 86400)) + 1;
+	float angle = glm::radians((float)w[0] + w[1] * (UTCtime / 86400)) + 2; 
 	// transforms model matrix by rotation
 	Model = glm::rotate(Model, angle, Up);
 	currAngleRad = angle;
@@ -226,6 +301,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime) {
 
 	updateModel(*gravSource);
 	dullShader(*lightSource);	// ONLY TIME lightSource is used in this fxn
+
 }
 
 void Mesh::updateModel(Mesh& source) {
@@ -238,3 +314,10 @@ void Mesh::updateModel(Mesh& source) {
 	Model = glm::rotate(Model, currAngleRad, Up);
 }
 
+double distanceFind(std::vector<double> pt1, std::vector<double> pt2) {
+	double x2 = abs(pt1[0] - pt2[0]);
+	double y2 = abs(pt1[1] - pt2[1]);
+	double z2 = abs(pt1[2] - pt2[2]);
+	x2 *= x2; x2 += (y2 * y2) + (z2 * z2);
+	return sqrt(x2);
+}
