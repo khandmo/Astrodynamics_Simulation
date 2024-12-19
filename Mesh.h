@@ -1,5 +1,5 @@
-#ifndef MESS_CLASS_H
-#define MESS_CLASS_H
+#ifndef MESH_CLASS_H
+#define MESH_CLASS_H
 
 #include <string>
 #include "VAO.h"
@@ -9,7 +9,13 @@
 #include "Shaders.h"
 #include "SpiceUsr.h"
 #include "Line.h"
+#include "Lines/geometry_shader_lines.h"
 
+#define UTC2J2000	946684800
+#define LARGEST_DISTANCE 4550000000
+#define MAX_VERTS 3 * 100 // 3 * 12 * 1024 * 1024
+#define REF_LIST_SIZE_U 11 // must be odd
+#define REF_LIST_SIZE (REF_LIST_SIZE_U * 2)
 /*
 Mesh holds all physical data about an object including the model data, whether or not it is a light source or a ring system,
 as well as rotation speed, mass and velocity - orbits are calculated and the model is appropriately manipulated here.
@@ -23,9 +29,10 @@ public:
 	std::vector <Texture> textures;
 	GLuint depthMap = 0;
 	Mesh* gravSource; // body whose SOI this body is currently in / body which exerts the greatest grav field on body in solar system
-	int soiID; // sphere of influence identification for 2 body equations
+	int soiID; // sphere of influence identification for 2 body equations and for "isMoon" flag / if soiID != 0
 	int spiceID;
 	int baryID;
+	int orbitalPeriod;
 
 	bool isLightSource;
 	bool areRings;
@@ -36,8 +43,26 @@ public:
 	glm::vec3 sphPos;
 	glm::vec3 Vel; // world velocity
 	glm::mat4 Model;
-	GLuint pathVBO; // for trajectory lines
-	int numPathPoints; // num of data pts for trajectory lines
+
+	geom_shader_lines_device_t pathDevice;
+	vertex_t lineBuffer[(MAX_VERTS / 3)];
+	int lineBufferSize = 0;
+	int pathCount = 0;
+	glm::vec4 lineColor = glm::vec4(1, 0, 0, 0.5f);
+	int lineWidth = 5;
+	double lBVertDt = 0;
+
+	vertex_t refinedList[REF_LIST_SIZE];
+	double refListDt;
+	int refListStartIdx = 0;
+	int bIdx, rIdx;
+	double refNodeMarkerTime, lBNodeMarkerTime, bt = 0, rt = 0;
+	int refinedRadius = 5;
+	int refinedListSize = REF_LIST_SIZE;
+	int flipper;
+	float refVertsSum = 0;
+
+
 	bool sign = false; // if rings, checks to see if sun has crossed ring plane
 
 	GLfloat mass;
@@ -60,7 +85,7 @@ public:
 
 
 
-	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, glm::vec4 objColor, glm::vec3 objPos, Shader *shaderProgram, int baryIDx, int spiceIDx, double UTCtime);
+	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, Shader *shaderProgram, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod);
 
 	// sets shader program for depth map
 	void setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix);
@@ -86,8 +111,8 @@ public:
 	// rotates model along x axis by degree given
 	void AxialTilt(GLfloat tiltDeg);
 
-	// calculate orbital position
-	void Orbit(Mesh* lightSource, double UTCTime);  // MIGHT HAVE TO HOLD VELOCITY AND PARENT SOURCE AS MESH PROPERTY, GET LIGHT SOURCES FROM SYSTEM
+	// calculate orbital position and control relative orbital lines
+	void Orbit(Mesh* lightSource, double UTCTime, glm::vec3 cameraPos);  // MIGHT HAVE TO HOLD VELOCITY AND PARENT SOURCE AS MESH PROPERTY, GET LIGHT SOURCES FROM SYSTEM
 
 	// update model position and orientation
 	void updateModel(Mesh& source);

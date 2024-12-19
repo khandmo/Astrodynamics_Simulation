@@ -20,6 +20,11 @@ Camera::Camera(int width, int height, glm::vec3 position) {
 	}
 }
 
+void Camera::updateWindowSize(int width, int height) {
+	Camera::width = width;
+	Camera::height = height;
+}
+
 void Camera::updateMatrix(float FOVdeg, float nearPlane, float farPlane) {
 	glm::mat4 view = glm::mat4(1.0f);
 	glm::mat4 proj = glm::mat4(1.0f);
@@ -31,7 +36,8 @@ void Camera::updateMatrix(float FOVdeg, float nearPlane, float farPlane) {
 	Camera::view = view;
 
 	// calculate projection normally
-	proj = glm::perspective(glm::radians(FOVdeg), (float)(width / height), nearPlane, farPlane);
+	proj = glm::perspective(glm::radians(FOVdeg), ((float)width / height), nearPlane, farPlane);
+
 	Camera::proj = proj;
 
 	cameraMatrix = proj * view;
@@ -107,7 +113,7 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) 
 
 			// spin factors
 			float rotx = sensitivity * (float)(mouseY - (height / 2)) / height;
-			float roty = sensitivity * (float)(mouseX - (height / 2)) / height;
+			float roty = sensitivity * (float)(mouseX - (width / 2)) / width;
 
 			// prevent barrel rolls - calculate new orientation before it happens
 			glm::vec3 newOrientation = glm::rotate(Orientation, glm::radians(-rotx), glm::normalize(glm::cross(Orientation, Up)));
@@ -148,9 +154,8 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) 
 
 			// spin factors
 			float rotx = sensitivity * (float)(mouseY - (height / 2)) / height;
-			float roty = sensitivity * (float)(mouseX - (height / 2)) / height;
+			float roty = sensitivity * (float)(mouseX - (width / 2)) / width;
 
-			// NOT UPDATING THE POSITION AT ALL, SHOULD UPDATE AROUND (0, 0, 0) FOR FOCUS POSITION, THEN UPDATE RELATIVE TO WORLD ORIGIN
 
 			// rotate position around body with fixed r by rotation amounts and compensate orientation
 			// prevent barrel rolls - calculate new orientation before it happens
@@ -185,6 +190,12 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 	
 	if (keyPress(window, GLFW_KEY_P)) { // toggles skybox
 		skyBox = !skyBox;
+		if (!skyBox) {
+			glClearColor(0.24f, 0.28f, 0.45f, 1.0f);
+		}
+		else {
+			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		}
 	}
 
 	if (keyPress(window, GLFW_KEY_RIGHT_BRACKET)) { // should modify the simulation time accordingly wtih dt = 1 == 1 second/second
@@ -196,8 +207,12 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 			dt--;
 	}
 
-	if (keyPress(window, GLFW_KEY_K)) { // killswitch for time warp
+	if (keyPress(window, GLFW_KEY_K)) { // killswitch for time warp - 1//9 was just playing with the sim and thought of what a good idea this feature would be but its already here
 		dt = 16;
+	}
+
+	if (keyPress(window, GLFW_KEY_H)) {
+		std::cout << "x = " << Position.x << "\t y = " << Position.y << "\t z = " << Position.z << '\n';
 	}
 	
 	if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS) { // cycle camera positions
@@ -220,8 +235,14 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 		focusMode = !focusMode;
 		if (focusMode == true) {
 			// reset focus parameters
-			focusBody = 0;
+			//focusBody = 0;
 			focusPos = glm::vec3((float)(focusDistSeg[focusDistMarker] * bodyRadii[focusBody]), 0.0f, 0.0f); // initialized as default focusDistMarker
+			/*
+			
+			would be cool to compare current position to position of focus body and jump to init focus distance along
+			that vector instead of jumping to the default - a bit jarring
+
+			*/
 			// reset orientation to look at the center of object, regardless of position
 			Orientation = glm::vec3(-1.0f, 0.0f, 0.0f);
 		}
@@ -263,7 +284,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 }
 
 
-bool Camera::keyPress(GLFWwindow* window, int key) {
+bool Camera::keyPress(GLFWwindow* window, int key) { // only works for alphabetical keys
 	if (glfwGetKey(window, key) == GLFW_PRESS) keyRange[key-65] = true;
 	if (glfwGetKey(window, key) == GLFW_RELEASE && keyRange[key-65]) {
 		keyRange[key-65] = false;

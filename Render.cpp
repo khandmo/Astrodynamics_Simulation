@@ -2,6 +2,8 @@
 
 unsigned int loadCubeMap(std::vector<const char*> faces);
 
+glm::mat4 mat4Mult(glm::mat4 A, glm::mat4 B);
+
 RenderSet::RenderSet(GLFWwindow* window, Camera& camera, int width, int height) {
 	RenderSet::window = window;
 	RenderSet::camera = &camera;
@@ -201,15 +203,79 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 		glBindVertexArray(0);*/
 }
 
-void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec) {
+void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, glm::vec3 cameraPos) {
 	// Every object that orbits must also have a rotate function, if it should not rotate set the first parameter to 0.0f
 	// Object will not be drawn if both functions are not present
+	
+	// Orbit drawing prep
+	uniform_data_t uni;
+	glm::mat4 mvp = camera->cameraMatrix * glm::mat4(1.0); // mult 4x4 glm - non zero, should check shader
+	uni.mvp = &mvp[0][0];
+	glm::vec4 vpt = glm::vec4(0, 0, (float)camera->width, (float)camera->height);
+	uni.viewport = &vpt.z;
+	glm::vec2 aa_radii = glm::vec2(2.0f, 2.0f);
+	uni.aa_radius = &aa_radii.x;
 
 	for (int i = 1; i < bodies.size(); i++) {
 		for (auto lBody : lBodies) {
 			(*bodies[i]).Rotate(lBody, simTime_sec);
-			(*bodies[i]).Orbit(lBody, simTime_sec);
-			renderLine(lineProgram, (*bodies[i]).pathVBO, (*bodies[i]).numPathPoints, glm::mat4(1.0f), glm::lookAt(glm::vec3(0.0f), (*camera).Orientation, (*camera).Up), (*camera).proj);
+			(*bodies[i]).Orbit(lBody, simTime_sec, cameraPos);
+
+			// update and render lines
+			if ((*bodies[i]).bIdx == NULL) {
+				geom_shdr_lines_update(&(*bodies[i]).pathDevice, &(*bodies[i]).lineBuffer,
+					(*bodies[i]).lineBufferSize, sizeof(vertex_t), &uni, (*bodies[i]).bIdx, (*bodies[i]).rIdx);
+				geom_shdr_lines_render(&(*bodies[i]).pathDevice, (*bodies[i]).lineBufferSize);
+			}
+			if ((*bodies[i]).bIdx != NULL) {
+
+				vertex_t* lB = (*bodies[i]).lineBuffer;
+				vertex* rB = (*bodies[i]).refinedList;
+				const int lBSz = (*bodies[i]).lineBufferSize;
+				const int bID = (*bodies[i]).bIdx;
+				const int rID = (*bodies[i]).rIdx;
+				const int llBSize = (MAX_VERTS / 3) + (REF_LIST_SIZE);
+				vertex_t llB[llBSize];
+				int rLEndIdx = (*bodies[i]).refListStartIdx - 1 >= 0 ? (*bodies[i]).refListStartIdx - 1 : REF_LIST_SIZE - 1;
+				llB[0] = rB[rLEndIdx]; 
+				//std::cout << llB[0].pos.x << '\t' << "0" << '\n';
+				for (int j = rID; j < lBSz; j++) {
+					//std::cout << lB[j].pos.x << '\t' << j << '\n';
+					llB[j + 1 - rID] = lB[j];
+				}
+				//std::cout << " **** " << '\n';
+				for (int j = 0; j <= bID + 1; j++) { // bID+1 cause it holds the same vertex for connection
+					//std::cout << lB[j].pos.x  << '\t' << j << '\n';
+					llB[j + lBSz - rID + 1] = lB[j];
+				}
+				//std::cout << lB[bID].pos.x << '\t' << lB[bID].pos.y << '\t' << lB[bID].pos.z << '\n';
+				int k = 0; // secondary index
+				for (int j = (*bodies[i]).refListStartIdx; j < REF_LIST_SIZE; j++){
+					//std::cout << rB[j].pos.x << " j = " << j << " bID = " << bID << " rID = " << rID << '\n';
+					llB[k + lBSz + bID - rID + 3] = rB[j];
+
+
+					if (j == REF_LIST_SIZE - 1) j = -1; // handle wrap
+					if (k == REF_LIST_SIZE - 2) break;
+					k++;
+				}
+				//std::cout << lB[bID].pos.x << "   " << lB[rID].pos.x << '\n';
+				//llB[llBSize - (rID - bID) + 1] = rB[rLEndIdx];
+				/*
+				NOTE: inhabited size of llB is always lineBufferSize + rLSize - (rID - bID) - 4
+				/*
+				for (int j = 0; j < llBSize - (rID - bID); j++) {
+					std::cout << llB[j].pos.x << " " << llB[j].pos.y << " " << llB[j].pos.z << " " << j << '\n';
+					
+				}
+				*/
+				//std::cout << "************************************" << '\n';
+				
+				geom_shdr_lines_update(&(*bodies[i]).pathDevice, llB,
+					llBSize - (rID - bID), sizeof(vertex_t), &uni, (*bodies[i]).bIdx, (*bodies[i]).rIdx);
+				geom_shdr_lines_render(&(*bodies[i]).pathDevice, llBSize - (rID - bID));
+			}
+
 		}
 	}	
 }
@@ -221,6 +287,7 @@ void RenderSet::RenderSkyBox(Camera* camera) {
 	view = glm::lookAt(glm::vec3(0.0f), (*camera).Orientation, (*camera).Up);
 	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "proj"), 1, GL_FALSE, glm::value_ptr((*camera).proj));
+
 	
 	glBindVertexArray(skyboxVAO);
 	glActiveTexture(GL_TEXTURE0);
@@ -229,6 +296,11 @@ void RenderSet::RenderSkyBox(Camera* camera) {
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	glBindVertexArray(0);
 	glDepthFunc(GL_LESS);
+}
+
+void RenderSet::updateWindowSize(int width, int height) {
+	RenderSet::screenWidth = width;
+	RenderSet::screenHeight = height;
 }
 
 unsigned int loadCubeMap(std::vector<const char*> faces) {
@@ -259,4 +331,15 @@ unsigned int loadCubeMap(std::vector<const char*> faces) {
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
 	return textureID;
+}
+
+glm::mat4 mat4Mult(glm::mat4 A, glm::mat4 B) {
+	glm::mat4 ans;
+	int i = -1;
+	for (int p = 0; p < 16; p++) {
+		if (p % 4 == 0) i++;
+		int j = p - 4 * i;
+		ans[i][j] = A[0][j] * B[i][0] + A[1][j] * B[i][1] + A[2][j] * B[i][2] + A[3][j] * B[i][3];
+	}
+	return ans;
 }

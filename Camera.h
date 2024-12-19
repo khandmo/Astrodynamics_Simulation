@@ -50,6 +50,8 @@ public:
 
 	void updateMatrix(float FOVdeg, float nearPlane, float farPlane);
 
+	void updateWindowSize(int width, int height);
+
 	void Matrix(Shader& shader, const char* uniform);
 	
 	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos);

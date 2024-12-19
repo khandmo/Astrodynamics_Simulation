@@ -41,6 +41,9 @@
     <ClCompile Include="Line.cpp">
       <Filter>Modules</Filter>
     </ClCompile>
+    <ClCompile Include="Lines\geometry_shader_lines.cpp">
+      <Filter>Modules</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EBO.h">
@@ -74,6 +77,24 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="Line.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\include\Lines\extern\msh_argparse.h">
+      <Filter>Line Stuff</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\include\Lines\extern\msh_camera.h">
+      <Filter>Line Stuff</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\include\Lines\extern\msh_vec_math.h">
+      <Filter>Line Stuff</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\include\Lines\extern\msh_std.h">
+      <Filter>Line Stuff</Filter>
+    </ClInclude>
+    <ClInclude Include="Lines\geometry_shader_lines.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\HDD Downloads\gl_utils.h">
       <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
@@ -114,6 +135,15 @@
     <None Include="line.frag">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="geoLine.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="geoLine.geo">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="geoLine.frag">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shaders">
@@ -124,6 +154,9 @@
     </Filter>
     <Filter Include="Modules">
       <UniqueIdentifier>{6a339010-7d99-4a3b-ab0e-2b30ad185e21}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Line Stuff">
+      <UniqueIdentifier>{daeb4daf-d77b-4adf-ab65-70d2fe596378}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>
