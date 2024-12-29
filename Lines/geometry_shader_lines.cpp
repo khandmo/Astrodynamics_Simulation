@@ -115,15 +115,15 @@ geom_shdr_lines_term_device( void** device_in )
 
 uint32_t
 geom_shdr_lines_update(geom_shader_lines_device_t* device_in, const void* data, int32_t n_elems, int32_t elem_size,
-                        uniform_data_t* uniform_data, int32_t bIdx, int32_t rIdx)
+                        uniform_data_t* uniform_data)
 {
   geom_shader_lines_device_t* device = (geom_shader_lines_device_t *) device_in;
   
   device->uniform_data = uniform_data;
 
 
-      glBindBuffer(GL_ARRAY_BUFFER, device->vbo);
-      glBufferSubData(GL_ARRAY_BUFFER, 0, n_elems * elem_size, data);
+  glBindBuffer(GL_ARRAY_BUFFER, device->vbo);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, n_elems * elem_size, data);
 
   return n_elems;
 }

@@ -14,6 +14,8 @@
 #define UTC2J2000	946684800
 #define LARGEST_DISTANCE 4550000000
 #define MAX_VERTS 3 * 100 // 3 * 12 * 1024 * 1024
+#define LINE_BUFF_SIZE_U 49 // SHOULD ALWAYS BE ODD for "refinedList" logic
+#define LINE_BUFF_SIZE (LINE_BUFF_SIZE_U * 2)
 #define REF_LIST_SIZE_U 11 // must be odd
 #define REF_LIST_SIZE (REF_LIST_SIZE_U * 2)
 /*
@@ -29,13 +31,14 @@ public:
 	std::vector <Texture> textures;
 	GLuint depthMap = 0;
 	Mesh* gravSource; // body whose SOI this body is currently in / body which exerts the greatest grav field on body in solar system
-	int soiID; // sphere of influence identification for 2 body equations and for "isMoon" flag / if soiID != 0
+	const char* soiID; // sphere of influence identification for 2 body equations and for "isMoon" flag / if soiID != 0
 	int spiceID;
 	int baryID;
 	int orbitalPeriod;
 
 	bool isLightSource;
 	bool areRings;
+	bool isMoon;
 	glm::vec4 Color; // only if object is a light source
 	glm::vec3 Pos; // world position
 	glm::vec3 oPos; // holder for trails
@@ -45,22 +48,22 @@ public:
 	glm::mat4 Model;
 
 	geom_shader_lines_device_t pathDevice;
-	vertex_t lineBuffer[(MAX_VERTS / 3)];
-	int lineBufferSize = 0;
-	int pathCount = 0;
+	vertex_t lineBuffer[(LINE_BUFF_SIZE)];
+	int lineBufferSize = LINE_BUFF_SIZE;
 	glm::vec4 lineColor = glm::vec4(1, 0, 0, 0.5f);
 	int lineWidth = 5;
 	double lBVertDt = 0;
 
-	vertex_t refinedList[REF_LIST_SIZE];
+	vertex_t* refinedList;
 	double refListDt;
 	int refListStartIdx = 0;
-	int bIdx, rIdx;
+	int bIdx = -1, rIdx = -1;
 	double refNodeMarkerTime, lBNodeMarkerTime, bt = 0, rt = 0;
 	int refinedRadius = 5;
 	int refinedListSize = REF_LIST_SIZE;
 	int flipper;
 	float refVertsSum = 0;
+	double lastItTime = NULL;
 
 
 	bool sign = false; // if rings, checks to see if sun has crossed ring plane
@@ -85,7 +88,7 @@ public:
 
 
 
-	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, Shader *shaderProgram, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod);
+	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, Shader *shaderProgram, const char* soiID, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod);
 
 	// sets shader program for depth map
 	void setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix);

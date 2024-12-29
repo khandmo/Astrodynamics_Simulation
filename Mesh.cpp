@@ -7,21 +7,23 @@ double distanceFind(glm::vec3 state1, glm::vec3 state2);
 
 void stateChange(SpiceDouble* state); // changes SpiceDoubule state[0-2] data from real life to simulation environment
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state); // finds closest vertex in buffer to state
-void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, double et, int timeWidth, int baryID,
+void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int baryID,
 	 double* pbt, double* prt, int* pbtIdx, int* prtIdx, double* refListDt, const int lWidth, const glm::vec4 lColor); // generates refined List
 
-Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, Shader* shaderProgram, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod) {
+Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, Shader* shaderProgram, const char* soiID, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod) {
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
 	Mesh::indices = indices;
 	Mesh::textures = textures;
 	Mesh::areRings = areRings;
 	Mesh::isLightSource = isLight;
+	Mesh::soiID = soiID;
 	Mesh::spiceID = spiceIDx;
 	Mesh::baryID = baryIDx;
 	Mesh::orbitalPeriod = orbPeriod; // each body has a factual orbital period in days hard coded for initialization
-	Mesh::bIdx = NULL; Mesh::rIdx = NULL;
-	// if is moon, reduce refine radius for orbital lines
+	Mesh::refinedList = nullptr;
+	if (soiID != "-1" && soiID != "0") isMoon = true;
+	else isMoon = false;
 
 	// initialize all kernels here, once
 	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
@@ -65,9 +67,6 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	VBO.Unbind();
 	EBO.Unbind();
 
-	// Determine set of points for orbital path drawing and set them in a VBO for each Mesh to hold
-	// uniquely
-
 	// need to detect a full orbit (return to pt OR orbital period calculation)
 	// return to pt would work for spacecraft imp too, worth trying
 
@@ -86,22 +85,20 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 		SpiceDouble state[6], newState[6];
 		SpiceDouble lt;
 		double et = UTCtime - UTC2J2000; // UTC to J2000
-		// should transcribe the points to be used and the parameters (so the code will change automatically upon revision)
-		// into a .txt file to read from since these values don't change, just generate them from number of orbital subdivisions
 			
 		vertex_t dummyier{}; // holds first orbital point to connect paths at end of buffer
 
-		int numPts = 49; // SHOULD ALWAYS BE ODD for "refinedList" logic
 		double tPt = 0; // current time adjusted for frame
-		et = abs(Mesh::orbitalPeriod * day + tPt); // dunno why i have to abs this
-		Mesh::lBVertDt = et / numPts;
-		for (int i = 0; i < numPts; i++) {
-			tPt += (et) / numPts; // time at each even division of orbital period
+		if (isMoon) tPt = et;
+		et = abs(Mesh::orbitalPeriod * day); // dunno why i have to abs this
+		Mesh::lBVertDt = et / LINE_BUFF_SIZE_U;
+		for (int i = 0; i < LINE_BUFF_SIZE_U; i++) {
+			tPt += (et) / LINE_BUFF_SIZE_U; // time at each even division of orbital period
 			if (tPt >= 1577923200) { // if orbital period extends beyond data store
-				lineBufferSize -= 2 * (numPts + 1 - i); // ******************************************************* need a way to cut out lines that bridge unfulfilled orbits
+				lineBufferSize -= 2 * (LINE_BUFF_SIZE_U + 1 - i); // ************************************************ need a way to cut out lines that bridge unfulfilled orbits
 				break;
 			}
-			spkezr_c(std::to_string(baryID).c_str(), tPt, "J2000", "NONE", "10", state, &lt);
+			spkezr_c(std::to_string(baryID).c_str(), tPt, "J2000", "NONE", soiID, state, &lt);
 			stateChange(state);
 
 			vertex_t dummy{};
@@ -112,7 +109,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 			if (i == 0) {
 				dummyier = dummy;
 			}
-			else if (i == numPts - 1) {
+			else if (i == LINE_BUFF_SIZE_U - 1) {
 				lineBuffer[2*i + 1] = dummyier;
 				lineBuffer[2*i - 1] = dummy;
 			}
@@ -121,11 +118,30 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 			}
 		}
 		Mesh::pathDevice = geom_shdr_lines_init_device();
-		lineBufferSize += numPts*2; // doubles up on each vertex
-		pathCount = numPts; // always half the lineBufferSize
+	}
+
+	/*
 
 
-	}	
+	if i make it so moon orbits only get made in a certain radius and delete themselves outside of it then
+	i might have to make an orbit for each at that specific time period
+	(let it be known i made it work in the first half hour of me working today)
+
+	i could use the refined method for moons, stretching the bounds out from the body and closing when the distance
+	between endpts is under some length
+	under timewarp the last endpoint can just update itself
+
+	can dynamically allcoate memory for the above method, should also update all refined lists to do the same thing to save on memory
+	hold a pointer to the thing in the class itself
+	create it with the 'new' keyword in a function
+	make sure to delete when necessary
+
+	use orbital period and number of points to get the average time per division
+	start half of the orbital period before 'now' and push the loop until it spins around
+
+	could also do this for mercury, also somewhat volatile orbit, though it'd have to be updated unlike the other lineBuffers
+
+	*/
 }
 
 void Mesh::setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix) {
@@ -213,7 +229,6 @@ void Mesh::Rotate(Mesh* lightSource, double UTCtime) {
 	// transforms model matrix by rotation
 	Model = glm::rotate(Model, angle, Up);
 	currAngleRad = angle;
-		//2.0f * glm::pi<float>() * 0.0600068844f / 40; // arbitrary testing constant
 	// redraws the shader for modified model
 	dullShader(*lightSource);
 }
@@ -245,9 +260,10 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 	SpiceDouble state[6];
 	SpiceDouble lt;
 	double et = UTCtime - UTC2J2000; // UTC to J2000
-	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", "10", state, &lt);
+	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
 	stateChange(state);
 	Pos = glm::vec3(state[0], state[1], state[2]);
+	if (isMoon) Pos = Pos + gravSource->Pos;
 
 	// if object are rings, meshes normals must be flipped when the sun crosses the ring plane (z-axis turning points)
 	if (areRings) { // below assumes the starting position is at z = 0
@@ -279,27 +295,40 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 	updateModel(*gravSource);
 	dullShader(*lightSource);	// ONLY TIME lightSource is used in this fxn
 
-	/*
-	If moon, add lineBuffer data to soiID position currently, will need an OG to add to constantly and a buffer to hold the modified
-	or save the time of the last iteration and subtract those distances to add the new ones
 
-	wonder if float fuckery would fuck this second plan the fuck up
-	*/
-
-
+	// moon lineBuffer and refinedList updating (according to gravSource position)
+	if (isMoon) {
+		glm::vec3 vecState;
+		if (lastItTime != NULL) {
+			spkezr_c(std::to_string(gravSource->baryID).c_str(), lastItTime - UTC2J2000, "J2000", "NONE", gravSource->soiID, state, &lt);
+			stateChange(state);
+			vecState = glm::vec3{ state[0], state[1], state[2] };
+		}
+		for (int i = 0; i < lineBufferSize; i++) {
+			if (lastItTime != NULL) lineBuffer[i].pos = lineBuffer[i].pos - vecState;
+			lineBuffer[i].pos += gravSource->Pos;
+		}
+		if (bIdx != -1) {
+			for (int i = 0; i < refinedListSize; i++) {
+				refinedList[i].pos -= vecState;
+				refinedList[i].pos += gravSource->Pos;
+			}
+		}
+	}
 
 	// update line positions
-	double week = 60 * 60 * 12;
+	double week = 60 * 60 * 24;
 
-	if (!areRings) {
-		if (distanceFind(cameraPos, Pos) < refinedRadius && bIdx == NULL) {
+	if (!areRings && isMoon) {
+		if (distanceFind(cameraPos, Pos) < refinedRadius && bIdx == -1) {
 			std::cout << "making og ref list " << lineBufferSize << '\n';
-			makeRefinedList(refinedList, lineBuffer, lineBufferSize, et, week, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+			refinedList = new vertex_t[REF_LIST_SIZE];
+			makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
 			refNodeMarkerTime = UTCtime;
 			lBNodeMarkerTime = UTCtime;
 		}
 
-		else if (distanceFind(cameraPos, Pos) < refinedRadius && bIdx != NULL) { // if still in camera Pos and above has already executed, modify refinedList appropriately
+		else if (distanceFind(cameraPos, Pos) < refinedRadius && bIdx != -1) { // if still in camera Pos and above has already executed, modify refinedList appropriately
 
 			double dt = UTCtime - refNodeMarkerTime; // is negative when back time traveling
 
@@ -313,7 +342,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 				std::cout << "redoing refList... " << numRefVerts << " nodes time surpassed " << '\n';
 				refNodeMarkerTime = UTCtime;
 				lBNodeMarkerTime = UTCtime;
-				makeRefinedList(refinedList, lineBuffer, lineBufferSize, et, week, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
 
 			}
 			else if (numRefVerts > 0) { //modify
@@ -349,10 +378,19 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 				refListStartIdx = (refListStartIdx + REF_LIST_SIZE) % REF_LIST_SIZE;
 
 				for (int i = 0; i < numRefVerts; i++) {
-					spkezr_c(std::to_string(baryID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "J2000", "NONE", "10", stateDt, &lt); // need the simTime of the last relevant point
+					spkezr_c(std::to_string(baryID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "J2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
 					stateChange(stateDt);
-					dummy.pos = glm::vec3(stateDt[0], stateDt[1], stateDt[2]);
+					
 
+					if (isMoon) {
+						int i = 0;
+						while (i < 3) {
+							stateDt[i] += gravSource->Pos[i];
+							i++;
+						}
+					}
+
+					dummy.pos = glm::vec3(stateDt[0], stateDt[1], stateDt[2]);
 					int index = refListStartIdx - ((2 * (numRefVerts - i - 1)) + 1) * flipper;
 					index = (index + REF_LIST_SIZE) % REF_LIST_SIZE;
 					
@@ -385,20 +423,26 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 				double distR = refListStartIdx > 0 ?
 					distanceFind(refinedList[refListStartIdx - 1].pos, lineBuffer[freeNode].pos) : distanceFind(refinedList[REF_LIST_SIZE - 1].pos, lineBuffer[freeNode].pos); // when -, idx to rIdx
 				double distR1 = distanceFind(lineBuffer[rIdx].pos, lineBuffer[rNode].pos);
-				if (flipper * distB > distB1 * flipper) { bIdx += 2 * flipper; lBNodeMarkerTime = UTCtime; }
-				if (flipper * distR > distR1 * flipper) { rIdx += 2 * flipper; lBNodeMarkerTime = UTCtime; }
+				if (distB > distB1) { bIdx += 2 * flipper; lBNodeMarkerTime = UTCtime; }
+				if (distR > distR1) { rIdx += 2 * flipper; lBNodeMarkerTime = UTCtime; }
 
-				if (bIdx > lineBufferSize - 1) bIdx = 0; 		
-				if (rIdx > lineBufferSize - 1) rIdx = 0;
+				if (bIdx > lineBufferSize - 1 || bIdx < 1) bIdx -= flipper * lineBufferSize;
+				if (rIdx > lineBufferSize - 1 || rIdx < 1) rIdx -= flipper * lineBufferSize;
 
 			}			
 		}
 		else { // if camera not in range of object, abandon
-			bIdx = NULL;
-			rIdx = NULL;
-			// no destructor program for vertex_t class
+			if (bIdx != -1) bIdx = -1;
+			if (rIdx != -1) rIdx = -1;
+			delete[] refinedList;
+			refinedList = nullptr;
+			// added these below 12/27
+			Mesh::refVertsSum = 0;
+			Mesh::refListStartIdx = 0;
+
 		}
 	}
+	Mesh::lastItTime = UTCtime;
 }
 
 
@@ -472,23 +516,11 @@ int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {
 		std::vector<double>{lineBuffer[1].pos.x, lineBuffer[1].pos.y,
 		lineBuffer[1].pos.z}); // line length - could take this out to main fxn and use to determine if a point should reassign bIdx / rIdx
 
-	// all these dist's arent necessary
-	int dist1 = distanceFind(lineBuffer[0].pos, state),
-		dist2 = distanceFind(lineBuffer[1].pos, state),
-		dist3 = distanceFind(lineBuffer[setSize-3].pos, state);
-	if (dist1 <= rad) return 0;
-	if (dist2 <= rad) return 1;
-	if (dist3 <= rad) return setSize - 3;
+	int min = 0, max = setSize - 2;
 
-	int min = 0, max = setSize/2;
-	if (dist3 < dist1) {
-		min = max;
-		max = setSize - 3;
-	}
 	// binary search
 	int idx = 0;
 	while (min <= max) { 
-		
 		idx = (min + max) / 2;
 		if (distanceFind(lineBuffer[idx].pos, state) <= rad) {
 			break;
@@ -500,9 +532,9 @@ int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {
 			min = idx + 1;
 		}
 	}
-
+	
+	if (idx == 0) idx = setSize - 1;
 	if (lineBuffer[idx].pos == lineBuffer[idx - 1].pos) idx -= 1; // make sure index is first chronological instance of vertex in lineBuffer
-	if (idx < 0) idx = setSize - 1;
 
 	float dt = 3600;
 	glm::vec3 newState;
@@ -515,16 +547,17 @@ int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {
 	else {
 		if (flipper > 0) idx -= 2;
 	}
-
+	
 	idx = (idx + setSize) % setSize;
-
+	 // lineBuffer doesn't start with a pair
+	std::cout << "idx " << idx << '\t' << lineBuffer[idx].pos.x << " " << lineBuffer[idx].pos.y << " " << lineBuffer[idx].pos.z << '\n';
 	return idx;
 }
 
-void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, double et, int timeWidth, int baryID,
+void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int baryID,
 	 double* pbt, double* prt, int* pbtIdx, int* prtIdx, double* refListDt, const int lWidth, const glm::vec4 lColor) {
 	double bt = et - timeWidth/2;  *pbt = bt;
-	double rt = et + timeWidth/2;	 *prt = rt;
+	double rt = et + timeWidth/2;  *prt = rt;
 
 	double rfDt = (rt - bt) / REF_LIST_SIZE_U; *refListDt = rfDt;
 
@@ -532,10 +565,17 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 	SpiceDouble stateRt[6];
 	SpiceDouble stateDt[6];
 	SpiceDouble lt;
-	spkezr_c(std::to_string(baryID).c_str(), bt, "J2000", "NONE", "10", stateBt, &lt);
-	spkezr_c(std::to_string(baryID).c_str(), rt, "J2000", "NONE", "10", stateRt, &lt);
+	spkezr_c(std::to_string(baryID).c_str(), bt, "J2000", "NONE", soiID, stateBt, &lt);
+	spkezr_c(std::to_string(baryID).c_str(), rt, "J2000", "NONE", soiID, stateRt, &lt);
 	stateChange(stateBt);
 	stateChange(stateRt);
+
+	if (soiID != "0") {
+		for (int i = 0; i < 3; i++) {
+			stateBt[i] += gravSource->Pos[i];
+			stateRt[i] += gravSource->Pos[i];
+		}
+	}
 
 	vertex_t dummy{};
 	dummy.width = lWidth;
@@ -546,10 +586,14 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 		*pbtIdx = btIdx; *prtIdx = rtIdx;
 
 	for (int i = 0; i < REF_LIST_SIZE_U; i++) {
-		spkezr_c(std::to_string(baryID).c_str(), bt + rfDt * (i + 1), "J2000", "NONE", "10", stateDt, &lt);
+		spkezr_c(std::to_string(baryID).c_str(), bt + rfDt * (i + 1), "J2000", "NONE", soiID, stateDt, &lt);
 		stateChange(stateDt);
+		if (soiID != "0") {
+			for (int i = 0; i < 3; i++) {
+				stateDt[i] += gravSource->Pos[i];
+			}
+		}
 		dummy.pos = glm::vec3(stateDt[0], stateDt[1], stateDt[2]);
-		//std::cout << stateDt[0] << " " << stateDt[1] << " " << stateDt[2] << '\n';
 		refinedList[2 * i] = dummy; // plants idx 0,2,4,6
 		refinedList[2 * i + 1] = dummy; // plants 1, 3, 5
 	}

@@ -220,60 +220,59 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, do
 		for (auto lBody : lBodies) {
 			(*bodies[i]).Rotate(lBody, simTime_sec);
 			(*bodies[i]).Orbit(lBody, simTime_sec, cameraPos);
-
 			// update and render lines
-			if ((*bodies[i]).bIdx == NULL) {
+			if ((*bodies[i]).bIdx == -1) {
 				geom_shdr_lines_update(&(*bodies[i]).pathDevice, &(*bodies[i]).lineBuffer,
-					(*bodies[i]).lineBufferSize, sizeof(vertex_t), &uni, (*bodies[i]).bIdx, (*bodies[i]).rIdx);
+					(*bodies[i]).lineBufferSize, sizeof(vertex_t), &uni);
 				geom_shdr_lines_render(&(*bodies[i]).pathDevice, (*bodies[i]).lineBufferSize);
 			}
-			if ((*bodies[i]).bIdx != NULL) {
-
+			if ((*bodies[i]).bIdx != -1) {
+				
 				vertex_t* lB = (*bodies[i]).lineBuffer;
 				vertex* rB = (*bodies[i]).refinedList;
 				const int lBSz = (*bodies[i]).lineBufferSize;
 				const int bID = (*bodies[i]).bIdx;
 				const int rID = (*bodies[i]).rIdx;
-				const int llBSize = (MAX_VERTS / 3) + (REF_LIST_SIZE);
+				const int brGap = ((rID - bID + lBSz) % lBSz) - 1; // mising verts between b and r
+				const int llBSize = LINE_BUFF_SIZE + REF_LIST_SIZE;
 				vertex_t llB[llBSize];
 				int rLEndIdx = (*bodies[i]).refListStartIdx - 1 >= 0 ? (*bodies[i]).refListStartIdx - 1 : REF_LIST_SIZE - 1;
-				llB[0] = rB[rLEndIdx]; 
-				//std::cout << llB[0].pos.x << '\t' << "0" << '\n';
+				llB[0] = rB[rLEndIdx]; // circular cap
+				int k = 0, k2 = 0; // secondary index
+
+				// linebuffer implant
 				for (int j = rID; j < lBSz; j++) {
-					//std::cout << lB[j].pos.x << '\t' << j << '\n';
-					llB[j + 1 - rID] = lB[j];
-				}
-				//std::cout << " **** " << '\n';
-				for (int j = 0; j <= bID + 1; j++) { // bID+1 cause it holds the same vertex for connection
-					//std::cout << lB[j].pos.x  << '\t' << j << '\n';
-					llB[j + lBSz - rID + 1] = lB[j];
-				}
-				//std::cout << lB[bID].pos.x << '\t' << lB[bID].pos.y << '\t' << lB[bID].pos.z << '\n';
-				int k = 0; // secondary index
-				for (int j = (*bodies[i]).refListStartIdx; j < REF_LIST_SIZE; j++){
-					//std::cout << rB[j].pos.x << " j = " << j << " bID = " << bID << " rID = " << rID << '\n';
-					llB[k + lBSz + bID - rID + 3] = rB[j];
-
-
-					if (j == REF_LIST_SIZE - 1) j = -1; // handle wrap
-					if (k == REF_LIST_SIZE - 2) break;
+					llB[k + 1] = lB[j];
 					k++;
+					if (j == lBSz - 1) j = -1;
+					if (bID == lBSz - 1) {
+						if (j == 0) break;
+					}
+					else {
+						if (j == bID + 1) break;
+					}
 				}
-				//std::cout << lB[bID].pos.x << "   " << lB[rID].pos.x << '\n';
-				//llB[llBSize - (rID - bID) + 1] = rB[rLEndIdx];
+
+				// refined list implant
+				for (int j = (*bodies[i]).refListStartIdx; j < REF_LIST_SIZE; j++){
+					llB[k + 1] = rB[j];
+					//std::cout << rB[j].pos.x << " " << rB[j].pos.y << " " << rB[j].pos.z << " " << j << '\n';
+					if (j == REF_LIST_SIZE - 1) j = -1; // handle wrap
+					if (k2 == REF_LIST_SIZE - 2) break;
+					k++;
+					k2++;
+				}
 				/*
-				NOTE: inhabited size of llB is always lineBufferSize + rLSize - (rID - bID) - 4
-				/*
-				for (int j = 0; j < llBSize - (rID - bID); j++) {
-					std::cout << llB[j].pos.x << " " << llB[j].pos.y << " " << llB[j].pos.z << " " << j << '\n';
+				for (int j = 0; j < llBSize ; j++) {
+					std::cout << llB[j].pos.x << " " << llB[j].pos.y << " " << llB[j].pos.z << " " << j << "\t" << brGap << '\n';
 					
 				}
 				*/
 				//std::cout << "************************************" << '\n';
 				
 				geom_shdr_lines_update(&(*bodies[i]).pathDevice, llB,
-					llBSize - (rID - bID), sizeof(vertex_t), &uni, (*bodies[i]).bIdx, (*bodies[i]).rIdx);
-				geom_shdr_lines_render(&(*bodies[i]).pathDevice, llBSize - (rID - bID));
+					llBSize - brGap + 1, sizeof(vertex_t), &uni);
+				geom_shdr_lines_render(&(*bodies[i]).pathDevice, llBSize - brGap + 1);
 			}
 
 		}

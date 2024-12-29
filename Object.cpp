@@ -246,13 +246,3 @@ void Object::Sphere(float radius, GLfloat red, GLfloat green, GLfloat blue) {
 	std::vector <GLuint> sphElem(sphI, sphI + sizeof(sphI) / sizeof(GLuint));
 	Object::indices = sphElem;
 }
-
-/*
-glm::vec3 sphToCart(glm::vec3 sphCoords) {
-	// turns (r, theta, phi) to (x, y, z)
-	glm::vec3 cartCoords = glm::vec3(0, 0, 0);
-	cartCoords.z = sphCoords.x * sin(sphCoords.y) * cos(sphCoords.z);
-	cartCoords.x = sphCoords.x * sin(sphCoords.y) * sin(sphCoords.z);
-	cartCoords.y = sphCoords.x * cos(sphCoords.y);
-	return cartCoords;
-}*/

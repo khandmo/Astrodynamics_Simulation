@@ -13,6 +13,8 @@
 
 #include "Shaders.h"
 
+#define NORM_SPEED 0.01f
+
 /*
 The camera class handles the manipulation of the camera matrices for position and orientation. It also handles
 user inputs for movement of the camera and focus mode / view.
@@ -43,7 +45,7 @@ public:
 	int width;
 	int height;
 
-	float speed = 0.01f;
+	float speed = NORM_SPEED;
 	float sensitivity = 100.0f;
 
 	Camera(int width, int height, glm::vec3 position);

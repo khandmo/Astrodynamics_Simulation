@@ -69,11 +69,14 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) 
 		if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) { // down
 			Position -= speed * Up;
 		}
-		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) { // faster
-			speed = 0.1f;
+		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS && glfwGetKey(window, GLFW_KEY_C) == GLFW_RELEASE) { // faster
+			speed = 0.2f;
 		}
-		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE) { // normal speed
-			speed = 0.01f;
+		if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS && glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE) { // slow speed
+			speed = 0.0005f;
+		}
+		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_RELEASE && glfwGetKey(window, GLFW_KEY_C) == GLFW_RELEASE) { // normal speed
+			speed = NORM_SPEED;
 		}
 	}
 	if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) { // reset spatial and cam position
@@ -207,7 +210,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 			dt--;
 	}
 
-	if (keyPress(window, GLFW_KEY_K)) { // killswitch for time warp - 1//9 was just playing with the sim and thought of what a good idea this feature would be but its already here
+	if (keyPress(window, GLFW_KEY_K)) { // killswitch for time warp - 1/9 was just playing with the sim and thought of what a good idea this feature would be but its already here
 		dt = 16;
 	}
 
