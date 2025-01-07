@@ -26,7 +26,6 @@ public:
 	GLuint depthMap;
 	glm::mat4 lightSpaceMatrix = glm::mat4(1.0f);
 	Shader shadowProgram = Shader("depth.vert", "depth.frag");
-	Shader lineProgram = Shader("line.vert", "line.frag");
 	Shader debug = Shader("debug.vert", "debug.frag");
 
 	unsigned int skyboxVAO = 0, skyboxVBO = 0;
@@ -40,7 +39,7 @@ public:
 	// render shadow maps
 	void ShadowRender(std::vector<Mesh*> &bodies, Camera* camera);
 	// move bodies
-	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, glm::vec3 cameraPos);
+	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos);
 	// render skybox
 	void RenderSkyBox(Camera* camera);
 	// update screen size

@@ -12,6 +12,7 @@
 
 
 #include "Shaders.h"
+#include "GUI.h"
 
 #define NORM_SPEED 0.01f
 
@@ -24,10 +25,10 @@ class Camera {
 public:
 	int cameraViewCycle = 0;
 	bool focusMode = false;
+	bool lastFocusMode = false;
+	int lastFocusBody = 0;
 	int focusBody = 0;
 	glm::vec3 focusPos = glm::vec3(3.0f, 0.0f, 0.0f);
-	float focusDistSeg[50];
-	int focusDistMarker = 20;
 
 	glm::vec3 Position;
 	glm::vec3 OrigPos;

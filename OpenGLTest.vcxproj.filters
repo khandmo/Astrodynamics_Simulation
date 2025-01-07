@@ -38,12 +38,19 @@
     <ClCompile Include="Textures.cpp">
       <Filter>Modules</Filter>
     </ClCompile>
-    <ClCompile Include="Line.cpp">
-      <Filter>Modules</Filter>
-    </ClCompile>
     <ClCompile Include="Lines\geometry_shader_lines.cpp">
       <Filter>Modules</Filter>
     </ClCompile>
+    <ClCompile Include="GUI.cpp">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui.cpp" />
+    <ClCompile Include="imgui\imgui_demo.cpp" />
+    <ClCompile Include="imgui\imgui_draw.cpp" />
+    <ClCompile Include="imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="imgui\imgui_tables.cpp" />
+    <ClCompile Include="imgui\imgui_widgets.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EBO.h">
@@ -76,9 +83,6 @@
     <ClInclude Include="Textures.h">
       <Filter>Headers</Filter>
     </ClInclude>
-    <ClInclude Include="Line.h">
-      <Filter>Headers</Filter>
-    </ClInclude>
     <ClInclude Include="Libraries\include\Lines\extern\msh_argparse.h">
       <Filter>Line Stuff</Filter>
     </ClInclude>
@@ -95,6 +99,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="D:\HDD Downloads\gl_utils.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="GUI.h">
       <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
@@ -129,12 +136,6 @@
     <None Include="skybox.vert">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="line.vert">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="line.frag">
-      <Filter>Shaders</Filter>
-    </None>
     <None Include="geoLine.vert">
       <Filter>Shaders</Filter>
     </None>
@@ -144,6 +145,7 @@
     <None Include="geoLine.frag">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="imgui\imgui.natstepfilter" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shaders">
@@ -158,5 +160,8 @@
     <Filter Include="Line Stuff">
       <UniqueIdentifier>{daeb4daf-d77b-4adf-ab65-70d2fe596378}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="imgui\imgui.natvis" />
   </ItemGroup>
 </Project>

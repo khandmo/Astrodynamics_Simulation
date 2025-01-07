@@ -76,13 +76,13 @@
     <LibraryPath>C:\Users\noizs\personal_projects\C++\OpenGLTest\Libraries\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>A:\Code\C++\Astrodynamics-Simulation\Libraries\include;A:\Code\C++\Astrodynamics-Simulation\Libraries\include;A:\Code\C++\Astrodynamics-Simulation\cspice\include;$(IncludePath)</IncludePath>
+    <IncludePath>A:\Code\C++\Astrodynamics-Simulation\imgui;A:\Code\C++\Astrodynamics-Simulation\Libraries\include;A:\Code\C++\Astrodynamics-Simulation\Libraries\include;A:\Code\C++\Astrodynamics-Simulation\cspice\include;$(IncludePath)</IncludePath>
     <LibraryPath>A:\Code\C++\Astrodynamics-Simulation\Libraries\lib;A:\Code\C++\Astrodynamics-Simulation\Libraries\lib;A:\Code\C++\Astrodynamics-Simulation\cspice\lib;$(LibraryPath)</LibraryPath>
     <SourcePath>A:\Code\C++\Astrodynamics-Simulation\cspice\src;$(SourcePath)</SourcePath>
     <ExecutablePath>A:\Code\C++\Astrodynamics-Simulation\cspice\exe;$(ExecutablePath)</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>A:\Code\C++\Astrodynamics-Simulation\Libraries\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>A:\Code\C++\Astrodynamics-Simulation\imgui;A:\Code\C++\Astrodynamics-Simulation\Libraries\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>A:\Code\C++\Astrodynamics-Simulation\Libraries\lib;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -147,7 +147,14 @@
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="EBO.cpp" />
     <ClCompile Include="glad.c" />
-    <ClCompile Include="Line.cpp" />
+    <ClCompile Include="GUI.cpp" />
+    <ClCompile Include="imgui\imgui.cpp" />
+    <ClCompile Include="imgui\imgui_demo.cpp" />
+    <ClCompile Include="imgui\imgui_draw.cpp" />
+    <ClCompile Include="imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="imgui\imgui_tables.cpp" />
+    <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="Lines\geometry_shader_lines.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="System.cpp" />
@@ -170,10 +177,9 @@
     <None Include="geoLine.frag" />
     <None Include="geoLine.geo" />
     <None Include="geoLine.vert" />
+    <None Include="imgui\imgui.natstepfilter" />
     <None Include="light.frag" />
     <None Include="light.vert" />
-    <None Include="line.frag" />
-    <None Include="line.vert" />
     <None Include="skybox.frag" />
     <None Include="skybox.vert" />
   </ItemGroup>
@@ -181,11 +187,11 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="D:\HDD Downloads\gl_utils.h" />
     <ClInclude Include="EBO.h" />
+    <ClInclude Include="GUI.h" />
     <ClInclude Include="Libraries\include\Lines\extern\msh_argparse.h" />
     <ClInclude Include="Libraries\include\Lines\extern\msh_camera.h" />
     <ClInclude Include="Libraries\include\Lines\extern\msh_std.h" />
     <ClInclude Include="Libraries\include\Lines\extern\msh_vec_math.h" />
-    <ClInclude Include="Line.h" />
     <ClInclude Include="Lines\geometry_shader_lines.h" />
     <ClInclude Include="System.h" />
     <ClInclude Include="Mesh.h" />
@@ -195,6 +201,9 @@
     <ClInclude Include="Textures.h" />
     <ClInclude Include="VAO.h" />
     <ClInclude Include="VBO.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="imgui\imgui.natvis" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

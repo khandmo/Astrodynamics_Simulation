@@ -1,12 +1,15 @@
 #include "System.h"
 #include "Object.h"
 #include "Render.h"
+#include "GUI.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 struct WindowData {
 	int width;
 	int height;
+	Camera* camera;
 };
 
 int main() {
@@ -29,10 +32,6 @@ int main() {
 	}
 
 	glfwMakeContextCurrent(window);
-	WindowData data = { width, height };
-	glfwSetWindowUserPointer(window, &data);
-	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-
 
 	// Load GLAD and configure to OpenGL
 	gladLoadGL();
@@ -50,6 +49,11 @@ int main() {
 	// initialize Camera with initial position
 	Camera camera(width, height, glm::vec3(130.0f, 0.0f, 0.0f));
 
+	WindowData data = { width, height, &camera};
+	glfwSetWindowUserPointer(window, &data);
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	glfwSetScrollCallback(window, scroll_callback);
+
 	// initialize renderer
 	RenderSet Renderer(window, camera, width, height);
 	Renderer.set();
@@ -61,14 +65,24 @@ int main() {
 	int dt = 16; // current time warp index 
 	bool dtChange = false;
 	float clickPTime = glfwGetTime();
+
 	Sys.SystemTime();
+
+	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, Sys.bodies, &(camera.speed), &(camera.focusMode), &(camera.focusBody) };
+	GUI gui(window, guiData);
+
 	std::cout << "beginning sim" << std::endl; 
 	while (!glfwWindowShouldClose(window)) {
+		// constantly checks current state of window 
+		glfwPollEvents();
+		// process GUI
+		gui.guiLoopStart(guiData);
+
 		if (!skyboxOn) {
 			glClearColor(0.24f, 0.28f, 0.45f, 1.0f);
 		}
 		else {
-			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+			glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // need to modify in sys fxn orbHandle
 		}
 		float clickCTime = glfwGetTime();
 
@@ -81,29 +95,40 @@ int main() {
 		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, skyboxOn, dt);
 		// values to be able to see the sun from neptune and handle resized windows
 		(camera).updateWindowSize(data.width, data.height);
-		(camera).updateMatrix(45.0f, 0.001f, 6100.0f * 2); 
+		(camera).updateMatrix(45.0f, 0.001f, 6100.0f * 2);
+
 		(Renderer).updateWindowSize(data.width, data.height);
+
 
 		// Process time 
 		Sys.WarpClockSet(dtRange[dt]);
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
-		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, (camera).Position);
+		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, dt, (camera).Position);
+		Sys.orbLineHandle((camera).Position);
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
 		}
 
+		// Render GUI
+		gui.guiLoopEnd();
+
+		// update gui info
+		guiData.time = Sys.simTime.timeString;
+		guiData.tWRange = dtRange[dt];
+		guiData.tW = &dt;
+		
 		//update image each frame
 		glfwSwapBuffers(window);
-		// constantly checks current state of window 
-		glfwPollEvents();
+
 	}
 
 	// terminatation handling
 	Sys.deleteSystem(); // need new fxn NOW FROM SYSTEM
 	glfwDestroyWindow(window);
 	glfwTerminate();
+	gui.guiDestroy();
 	return 0;
 }
 
@@ -113,3 +138,24 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	data->height = height;
 	glViewport(0, 0, data->width, data->height);
 }
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	if (!io.WantCaptureMouse) {
+		WindowData* data = static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+		if (data->camera->focusMode) {
+			// focus mode zoom in / zoom out
+			if (yoffset < 0) { // zoom in
+				data->camera->focusPos *= 1.1;
+					//
+					// camera->focusPos *= (camera->focusDistSeg[camera->focusDistMarker - 1] / camera->focusDistSeg[camera->focusDistMarker--]);
+			}
+			if (yoffset > 0) { // zoom out
+				data->camera->focusPos /= 1.1;
+					//camera->focusPos *= (camera->focusDistSeg[camera->focusDistMarker + 1] / camera->focusDistSeg[camera->focusDistMarker++]);
+			}
+		}
+	}
+}
+

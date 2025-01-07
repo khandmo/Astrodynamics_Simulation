@@ -1,9 +1,6 @@
 #include "Mesh.h"
 
-// distnace find formulae
-double distanceFind(std::vector<double> pt1, std::vector<double> pt2);
-double distanceFind(glm::vec3 state1, SpiceDouble* state2);
-double distanceFind(glm::vec3 state1, glm::vec3 state2);
+
 
 void stateChange(SpiceDouble* state); // changes SpiceDoubule state[0-2] data from real life to simulation environment
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state); // finds closest vertex in buffer to state
@@ -25,7 +22,8 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	if (soiID != "-1" && soiID != "0") isMoon = true;
 	else isMoon = false;
 
-	// initialize all kernels here, once
+	
+	// initialize all kernels here, once (happens once for each body dumbass)
 	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
 	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 
@@ -34,9 +32,13 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 		Mesh::Color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
+	// init position(s)
+	Pos = new glm::vec3{ 0.0f, 0.0f, 0.0f };
+	oPos = new glm::vec3{ *Pos };
+
 	// set object model position
 	glm::mat4 objModel = glm::mat4(1.0f);
-	objModel = glm::translate(objModel, Pos);
+	objModel = glm::translate(objModel, *Pos); // Pos is nullptr here
 	Mesh::Model = objModel;
 
 
@@ -74,15 +76,10 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	int hour = 60 * 60;
 	int day = hour * 24;
 	int month = day * 30;
-	int passed = 0;
-	int hit = 0;
-	int done = 0;
-	int distance = 0; // best distance to initial pt
-	double newD;
 
 	// orbital line composition scripting
-	if (name != "sun" && !areRings) {
-		SpiceDouble state[6], newState[6];
+	if (baryID != 10 && !areRings) {
+		SpiceDouble state[6];
 		SpiceDouble lt;
 		double et = UTCtime - UTC2J2000; // UTC to J2000
 			
@@ -92,10 +89,11 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 		if (isMoon) tPt = et;
 		et = abs(Mesh::orbitalPeriod * day); // dunno why i have to abs this
 		Mesh::lBVertDt = et / LINE_BUFF_SIZE_U;
+
 		for (int i = 0; i < LINE_BUFF_SIZE_U; i++) {
 			tPt += (et) / LINE_BUFF_SIZE_U; // time at each even division of orbital period
 			if (tPt >= 1577923200) { // if orbital period extends beyond data store
-				lineBufferSize -= 2 * (LINE_BUFF_SIZE_U + 1 - i); // ************************************************ need a way to cut out lines that bridge unfulfilled orbits
+				lineBufferSize -= 2 * (LINE_BUFF_SIZE_U + 1 - i); // ******************************** need a way to cut out lines that bridge unfulfilled orbits
 				break;
 			}
 			spkezr_c(std::to_string(baryID).c_str(), tPt, "J2000", "NONE", soiID, state, &lt);
@@ -177,7 +175,7 @@ void Mesh::dullShader(Mesh& lightSource) {
 
 	// model shader color uniform (sun on earth) and shader uniform
 	glUniform4f(glGetUniformLocation((ShaderProgram).ID, "lightColor"), lightSource.Color.x, lightSource.Color.y, lightSource.Color.z, lightSource.Color.w);
-	glUniform3f(glGetUniformLocation((ShaderProgram).ID, "lightPos"), lightSource.Pos.x, lightSource.Pos.y, lightSource.Pos.z);
+	glUniform3f(glGetUniformLocation((ShaderProgram).ID, "lightPos"), (lightSource.Pos)->x, (lightSource.Pos)->y, (lightSource.Pos)->z);
 
 	// uniform for depth and default
 	glUniformMatrix4fv(glGetUniformLocation((ShaderProgram).ID, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lsMatrix));
@@ -225,7 +223,7 @@ void Mesh::Rotate(Mesh* lightSource, double UTCtime) {
 	SpiceInt dim;
 	bodvcd_c(spiceID, "PM", 3, &dim, w); // this angle is equivalent to the rotation angle, no need for rotation rates to be preprogrammed
 
-	float angle = glm::radians((float)w[0] + w[1] * (UTCtime / 86400)) + 2; 
+	float angle = glm::radians((float)w[0] + w[1] * ((UTCtime) / 86400)) + glm::pi<float>();
 	// transforms model matrix by rotation
 	Model = glm::rotate(Model, angle, Up);
 	currAngleRad = angle;
@@ -253,21 +251,47 @@ void Mesh::AxialTilt(GLfloat tiltDeg) {
 	axisTiltDegree = tiltDeg;
 }
 
-void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
-
-	// SPICE TO MODIFY Pos vector
-
+void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3 cameraPos) {
+	
+	*oPos = *Pos;
+	
+	// NASA SPICE position
 	SpiceDouble state[6];
 	SpiceDouble lt;
 	double et = UTCtime - UTC2J2000; // UTC to J2000
 	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
 	stateChange(state);
-	Pos = glm::vec3(state[0], state[1], state[2]);
-	if (isMoon) Pos = Pos + gravSource->Pos;
+	glm::vec3 tempPos= glm::vec3(state[0], state[1], state[2]);
+	if (isMoon && gravSource->Pos != nullptr) tempPos += *(gravSource->Pos); 
+	
+	// ************* below is not optimized for backwards time travel 
+
+	*Pos = tempPos;
+	/*
+	if ( lastItTime != NULL && abs(UTCtime - lastItTime) > 1 && distanceFind(cameraPos, *Pos) < refinedRadius) {
+		//if (isMoon) *Pos -= *(gravSource->oPos);
+		for (int i = 0; i < abs(UTCtime - lastItTime); i++) {
+			spkezr_c(std::to_string(baryID).c_str(), lastItTime - UTC2J2000 + i + 1, "J2000", "NONE", "10", state, &lt);
+			stateChange(state);
+			*Pos += glm::vec3(state[3], state[4], state[5]);
+		}
+		//if (isMoon) *Pos += *(gravSource->Pos);
+	}
+	else {
+		*Pos = tempPos;
+	}
+	*/
+	//*Pos += glm::vec3(state[3] * orbDt, state[4] * orbDt, state[5] * orbDt);
+	// use velocity for in-between pos update steps
+	
+	//std::cout << UTCtime - lastItTime << '\n';
+
+	//if (name == "moon")
+	//	std::cout << Pos->x << " " << Pos->y << " " << Pos->z << "\n";
 
 	// if object are rings, meshes normals must be flipped when the sun crosses the ring plane (z-axis turning points)
 	if (areRings) { // below assumes the starting position is at z = 0
-		if (Pos.z > 0 && !sign) {
+		if (Pos->z > 0 && !sign) {
 			sign = !sign;
 			for (int i = 0; i < vertices.size(); i++) {
 				vertices[i].normal = -vertices[i].normal;
@@ -279,7 +303,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 			VAO.Unbind();
 			VBO.Unbind();
 		}
-		else if (Pos.z < 0 && sign) {
+		else if (Pos->z < 0 && sign) {
 			sign = !sign;
 			for (int i = 0; i < vertices.size(); i++) {
 				vertices[i].normal = -vertices[i].normal;
@@ -298,37 +322,30 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 
 	// moon lineBuffer and refinedList updating (according to gravSource position)
 	if (isMoon) {
-		glm::vec3 vecState;
-		if (lastItTime != NULL) {
-			spkezr_c(std::to_string(gravSource->baryID).c_str(), lastItTime - UTC2J2000, "J2000", "NONE", gravSource->soiID, state, &lt);
-			stateChange(state);
-			vecState = glm::vec3{ state[0], state[1], state[2] };
-		}
 		for (int i = 0; i < lineBufferSize; i++) {
-			if (lastItTime != NULL) lineBuffer[i].pos = lineBuffer[i].pos - vecState;
-			lineBuffer[i].pos += gravSource->Pos;
+			if (lastItTime != NULL) lineBuffer[i].pos -= *(gravSource->oPos); // linebuffer made from local pos ( replaced vecState w/ *(gravSource->oPos))
+			lineBuffer[i].pos += *(gravSource->Pos); // make global with source Pos
 		}
 		if (bIdx != -1) {
 			for (int i = 0; i < refinedListSize; i++) {
-				refinedList[i].pos -= vecState;
-				refinedList[i].pos += gravSource->Pos;
+				refinedList[i].pos -= *(gravSource->oPos);
+				refinedList[i].pos += *(gravSource->Pos);
 			}
 		}
 	}
 
 	// update line positions
-	double week = 60 * 60 * 24;
+	double week = 60 * 60 * 24 * orbitalPeriod / 24; // ref list time gap, should base this on orbital period
 
-	if (!areRings && isMoon) {
-		if (distanceFind(cameraPos, Pos) < refinedRadius && bIdx == -1) {
-			std::cout << "making og ref list " << lineBufferSize << '\n';
+	if (!areRings) {
+		if (distanceFind(cameraPos, *Pos) < refinedRadius && bIdx == -1) {
 			refinedList = new vertex_t[REF_LIST_SIZE];
 			makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
 			refNodeMarkerTime = UTCtime;
 			lBNodeMarkerTime = UTCtime;
 		}
 
-		else if (distanceFind(cameraPos, Pos) < refinedRadius && bIdx != -1) { // if still in camera Pos and above has already executed, modify refinedList appropriately
+		else if (distanceFind(cameraPos, *Pos) < refinedRadius && bIdx != -1) { // if still in camera Pos and above has already executed, modify refinedList appropriately
 
 			double dt = UTCtime - refNodeMarkerTime; // is negative when back time traveling
 
@@ -339,7 +356,6 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 			int numRefVerts = floor(allRefVerts);
 
 			if (numRefVerts >= REF_LIST_SIZE_U) { //redo
-				std::cout << "redoing refList... " << numRefVerts << " nodes time surpassed " << '\n';
 				refNodeMarkerTime = UTCtime;
 				lBNodeMarkerTime = UTCtime;
 				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
@@ -351,7 +367,6 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 				numRefVerts += floor(Mesh::refVertsSum);
 				Mesh::refVertsSum = Mesh::refVertsSum - floor(Mesh::refVertsSum);
 
-				std::cout << "modifying refList... " << numRefVerts << " nodes being replaced " << '\n';
 				// initialize vars for making new vertices
 				refNodeMarkerTime = UTCtime;
 				SpiceDouble stateDt[6];
@@ -385,7 +400,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 					if (isMoon) {
 						int i = 0;
 						while (i < 3) {
-							stateDt[i] += gravSource->Pos[i];
+							stateDt[i] += (*(gravSource->Pos))[i];
 							i++;
 						}
 					}
@@ -436,7 +451,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, glm::vec3 cameraPos) {
 			if (rIdx != -1) rIdx = -1;
 			delete[] refinedList;
 			refinedList = nullptr;
-			// added these below 12/27
+			
 			Mesh::refVertsSum = 0;
 			Mesh::refListStartIdx = 0;
 
@@ -450,7 +465,7 @@ void Mesh::updateModel(Mesh& source) {
 	// change model pos and rotation and axial tilt
 	// orbit disappears the model
 	glm::mat4 objModel = glm::mat4(1.0f);
-	Model = glm::translate(objModel, Pos);
+	Model = glm::translate(objModel, *Pos);
 
 	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::vec3(1.0f, 0.0f, 0.0f));
 	Model = glm::rotate(Model, currAngleRad, Up);
@@ -465,7 +480,7 @@ double distanceFind(std::vector<double> pt1, std::vector<double> pt2) {
 	return sqrt(x2);
 }
 
-double distanceFind(glm::vec3 state1, SpiceDouble* state2) {
+double distanceFind(glm::vec3 state1, SpiceDouble * state2) {
 	double x = abs(state1[0] - state2[0]);
 	double y = abs(state1[1] - state2[1]);
 	x *= x; x += y * y;
@@ -486,12 +501,10 @@ double distanceFind(glm::vec3 state1, glm::vec3 state2) {
 
 void stateChange(SpiceDouble* state) { 
 	// scales states by chosen value
-	state[0] = (state[0] * 6100 / LARGEST_DISTANCE);
-	state[1] = (state[1] * 6100 / LARGEST_DISTANCE);
-	state[2] = (state[2] * 6100 / LARGEST_DISTANCE);
-	state[3] = (state[3] * 6100 / LARGEST_DISTANCE);
-	state[4] = (state[4] * 6100 / LARGEST_DISTANCE);
-	state[5] = (state[5] * 6100 / LARGEST_DISTANCE);
+	for (int i = 0; i < 6; i++) {
+		state[i] = (state[i] * 6100) / LARGEST_DISTANCE;
+	}
+
 	// places the eccliptic horizontal and changes orientation for OpenGL
 	glm::vec3 posVec = glm::vec3(state[0], state[1], state[2]);
 	posVec = glm::rotateX(posVec, glm::radians(-23.4f));
@@ -549,8 +562,7 @@ int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {
 	}
 	
 	idx = (idx + setSize) % setSize;
-	 // lineBuffer doesn't start with a pair
-	std::cout << "idx " << idx << '\t' << lineBuffer[idx].pos.x << " " << lineBuffer[idx].pos.y << " " << lineBuffer[idx].pos.z << '\n';
+
 	return idx;
 }
 
@@ -572,8 +584,8 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 
 	if (soiID != "0") {
 		for (int i = 0; i < 3; i++) {
-			stateBt[i] += gravSource->Pos[i];
-			stateRt[i] += gravSource->Pos[i];
+			stateBt[i] += (*(gravSource->Pos))[i];
+			stateRt[i] += (*(gravSource->Pos))[i];
 		}
 	}
 
@@ -590,7 +602,7 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 		stateChange(stateDt);
 		if (soiID != "0") {
 			for (int i = 0; i < 3; i++) {
-				stateDt[i] += gravSource->Pos[i];
+				stateDt[i] += (*(gravSource->Pos))[i];
 			}
 		}
 		dummy.pos = glm::vec3(stateDt[0], stateDt[1], stateDt[2]);

@@ -55,27 +55,6 @@ geom_shdr_lines_init_device( void )
   device.uniforms.mvp = glGetUniformLocation( device.program_id, "u_mvp" ); // linked to index 1
   device.uniforms.viewport_size = glGetUniformLocation( device.program_id, "u_viewport_size" ); // linked to index 2
   device.uniforms.aa_radius = glGetUniformLocation(device.program_id, "u_aa_radius"); // linked to index 0
-  
-
-  /*
-  GLuint  binding_idx = 0;
-  glCreateVertexArrays( 1, &device->vao );
-  glCreateBuffers( 1, &device->vbo ); // dont work cause wrong opengl version. understand code & rewrite with available fxns
-  // creates VBO data store
-  glNamedBufferStorage( device->vbo, MAX_VERTS * sizeof(vertex_t), NULL, GL_DYNAMIC_STORAGE_BIT );
-
-  //binds vao and vbo
-  glVertexArrayVertexBuffer( device->vao, binding_idx, device->vbo, 0, sizeof(vertex_t) );
-  // enables specific attribs
-  glEnableVertexArrayAttrib( device->vao, device->attribs.pos_width );
-  glEnableVertexArrayAttrib( device->vao, device->attribs.col );
-  // format attribs
-  glVertexArrayAttribFormat( device->vao, device->attribs.pos_width, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, pos_width) );
-  glVertexArrayAttribFormat( device->vao, device->attribs.col, 4, GL_FLOAT, GL_FALSE, offsetof(vertex_t, col) );
-  // bind VAO attribs to VBO index
-  glVertexArrayAttribBinding( device->vao, device->attribs.pos_width, binding_idx );
-  glVertexArrayAttribBinding( device->vao, device->attribs.col, binding_idx );
-  */
 
 
   // Generate VAO & VBO

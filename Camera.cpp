@@ -10,14 +10,6 @@ Camera::Camera(int width, int height, glm::vec3 position) {
 	std::vector<bool> range(29, false); // this numbering scheme only works A - ] (65-93)
 	keyRange = range;
 
-	// initialize focusDistSeg
-	focusDistSeg[0] = 1.25;
-	for (int i = 1; i < 50; i++) {
-		if (i <= 25)
-			focusDistSeg[i] = focusDistSeg[i - 1] + 0.25;
-		else
-			focusDistSeg[i] = focusDistSeg[i - 1] + 0.75;
-	}
 }
 
 void Camera::updateWindowSize(int width, int height) {
@@ -98,93 +90,96 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos) 
 
 	
 	//mouse controls
-	if (!focusMode) {
-		if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-			// hide cursor on press
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+	ImGuiIO& io = ImGui::GetIO();
+	if (!io.WantCaptureMouse) {
+		if (!focusMode) {
+			if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+				// hide cursor on press
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
-			// for smooth mouse look around
-			if (firstClick) {
+				// for smooth mouse look around
+				if (firstClick) {
+					glfwSetCursorPos(window, (width / 2), (height / 2));
+					firstClick = false;
+				}
+
+				// get mouse pos
+				double mouseX;
+				double mouseY;
+				glfwGetCursorPos(window, &mouseX, &mouseY);
+
+				// spin factors
+				float rotx = sensitivity * (float)(mouseY - (height / 2)) / height;
+				float roty = sensitivity * (float)(mouseX - (width / 2)) / width;
+
+				// prevent barrel rolls - calculate new orientation before it happens
+				glm::vec3 newOrientation = glm::rotate(Orientation, glm::radians(-rotx), glm::normalize(glm::cross(Orientation, Up)));
+
+				// if new orientation close to up or down axis, prevent orientation from reaching it
+				if (!((glm::angle(newOrientation, Up) <= glm::radians(5.0f) or glm::angle(newOrientation, -Up) <= glm::radians(5.0f)))) {
+					Orientation = newOrientation;
+				}
+
+				// calculate y rotation
+				Orientation = glm::rotate(Orientation, glm::radians(-roty), Up);
+
+				// keep cursor in middle of screen
 				glfwSetCursorPos(window, (width / 2), (height / 2));
-				firstClick = false;
+
 			}
-
-			// get mouse pos
-			double mouseX;
-			double mouseY;
-			glfwGetCursorPos(window, &mouseX, &mouseY);
-
-			// spin factors
-			float rotx = sensitivity * (float)(mouseY - (height / 2)) / height;
-			float roty = sensitivity * (float)(mouseX - (width / 2)) / width;
-
-			// prevent barrel rolls - calculate new orientation before it happens
-			glm::vec3 newOrientation = glm::rotate(Orientation, glm::radians(-rotx), glm::normalize(glm::cross(Orientation, Up)));
-
-			// if new orientation close to up or down axis, prevent orientation from reaching it
-			if (!((glm::angle(newOrientation, Up) <= glm::radians(5.0f) or glm::angle(newOrientation, -Up) <= glm::radians(5.0f)))) {
-				Orientation = newOrientation;
+			else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE) {
+				// reveal cursor on release
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+				firstClick = true;
 			}
-
-			// calculate y rotation
-			Orientation = glm::rotate(Orientation, glm::radians(-roty), Up);
-
-			// keep cursor in middle of screen
-			glfwSetCursorPos(window, (width / 2), (height / 2));
-
 		}
-		else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE) {
-			// reveal cursor on release
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-			firstClick = true;
-		}
-	}
-	else { // focus mode enables mouse rotation around body in focus
-		if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-			// hide cursor on press
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+		else { // focus mode enables mouse rotation around body in focus
+			if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+				// hide cursor on press
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
 
-			// for smooth mouse look around
-			if (firstClick) {
+				// for smooth mouse look around
+				if (firstClick) {
+					glfwSetCursorPos(window, (width / 2), (height / 2));
+					firstClick = false;
+				}
+
+				// get mouse pos
+				double mouseX;
+				double mouseY;
+				glfwGetCursorPos(window, &mouseX, &mouseY);
+
+				// spin factors
+				float rotx = sensitivity * (float)(mouseY - (height / 2)) / height;
+				float roty = sensitivity * (float)(mouseX - (width / 2)) / width;
+
+
+				// rotate position around body with fixed r by rotation amounts and compensate orientation
+				// prevent barrel rolls - calculate new orientation before it happens
+				glm::vec3 newPosition = glm::rotate(focusPos, glm::radians(rotx), glm::normalize(glm::cross(focusPos, Up)));
+				glm::vec3 newOrientation = glm::rotate(Orientation, glm::radians(rotx), glm::normalize(glm::cross(focusPos, Up)));
+
+				// if new position close to up or down axis, prevent position from reaching it
+				if (!((glm::angle(newOrientation, Up) <= glm::radians(5.0f) or glm::angle(newOrientation, -Up) <= glm::radians(5.0f)))) {
+					focusPos = newPosition;
+					Orientation = newOrientation;
+				}
+
+				// calculate y rotation and orientation
+				focusPos = glm::rotate(focusPos, glm::radians(-roty), Up);
+				Position = *bodyPos[focusBody] + focusPos;
+				Orientation = glm::rotate(Orientation, glm::radians(-roty), Up);
+
+
+				// keep cursor in middle of screen
 				glfwSetCursorPos(window, (width / 2), (height / 2));
-				firstClick = false;
+
 			}
-
-			// get mouse pos
-			double mouseX;
-			double mouseY;
-			glfwGetCursorPos(window, &mouseX, &mouseY);
-
-			// spin factors
-			float rotx = sensitivity * (float)(mouseY - (height / 2)) / height;
-			float roty = sensitivity * (float)(mouseX - (width / 2)) / width;
-
-
-			// rotate position around body with fixed r by rotation amounts and compensate orientation
-			// prevent barrel rolls - calculate new orientation before it happens
-			glm::vec3 newPosition = glm::rotate(focusPos, glm::radians(rotx), glm::normalize(glm::cross(focusPos, Up)));
-			glm::vec3 newOrientation = glm::rotate(Orientation, glm::radians(rotx), glm::normalize(glm::cross(focusPos, Up)));
-
-			// if new position close to up or down axis, prevent position from reaching it
-			if (!((glm::angle(newOrientation, Up) <= glm::radians(5.0f) or glm::angle(newOrientation, -Up) <= glm::radians(5.0f)))) {
-				focusPos = newPosition;
-				Orientation = newOrientation;
+			else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE) {
+				// reveal cursor on release
+				glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+				firstClick = true;
 			}
-
-			// calculate y rotation and orientation
-			focusPos = glm::rotate(focusPos, glm::radians(-roty), Up);
-			Position = *bodyPos[focusBody] + focusPos;
-			Orientation = glm::rotate(Orientation, glm::radians(-roty), Up);
-			
-
-			// keep cursor in middle of screen
-			glfwSetCursorPos(window, (width / 2), (height / 2));
-
-		}
-		else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE) {
-			// reveal cursor on release
-			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-			firstClick = true;
 		}
 	}
 }
@@ -236,10 +231,10 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 
 	if (keyPress(window, GLFW_KEY_F)) {  // toggle focus mode on camera
 		focusMode = !focusMode;
+		lastFocusMode = focusMode;
 		if (focusMode == true) {
 			// reset focus parameters
-			//focusBody = 0;
-			focusPos = glm::vec3((float)(focusDistSeg[focusDistMarker] * bodyRadii[focusBody]), 0.0f, 0.0f); // initialized as default focusDistMarker
+			focusPos = glm::vec3((float)(8 * bodyRadii[focusBody]), 0.0f, 0.0f); // initialized as default focusDistMarker
 			/*
 			
 			would be cool to compare current position to position of focus body and jump to init focus distance along
@@ -250,7 +245,13 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 			Orientation = glm::vec3(-1.0f, 0.0f, 0.0f);
 		}
 	}
-	if (focusMode) {
+	if (lastFocusMode != focusMode && focusMode == true) {
+		lastFocusMode = focusMode;
+		focusPos = glm::vec3((float)(8 * bodyRadii[focusBody]), 0.0f, 0.0f);
+		Position = *bodyPos[focusBody] + focusPos;
+		Orientation = glm::vec3(-1.0f, 0.0f, 0.0f);
+	}
+	if (focusMode) { // ************* make focusPos change whenever focusBody changes, even if not using keys
 		// scroll through object in focus
 		if (keyPress(window, GLFW_KEY_A)) { // move backward through object list focus and preserve camera distance to body
 			if (focusBody == 0) {
@@ -261,6 +262,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 				focusBody--;
 				focusPos *= (bodyRadii[focusBody] / bodyRadii[focusBody + 1]);
 			}
+			lastFocusBody = focusBody;
 		}
 		if (keyPress(window, GLFW_KEY_D)) { // move forward through object list focus and preserve camera distance to body
 			if (focusBody == bodyPos.size() - 1) {
@@ -271,20 +273,16 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 				focusBody++;
 				focusPos *= (bodyRadii[focusBody] / bodyRadii[focusBody - 1]);
 			}
-		}		
-		// focus mode zoom in / zoom out
-		if (keyPress(window, GLFW_KEY_W)) { // zoom in
-			std::cout << focusDistMarker << '\n';
-			if (focusDistMarker > 0)
-				focusPos *= (focusDistSeg[focusDistMarker - 1] / focusDistSeg[focusDistMarker--]);
+			lastFocusBody = focusBody;
 		}
-		if (keyPress(window, GLFW_KEY_S)) { // zoom out
-			std::cout << focusDistMarker << '\n';
-			if (focusDistMarker < 50)
-				focusPos *= (focusDistSeg[focusDistMarker + 1] / focusDistSeg[focusDistMarker++]);
+		if (lastFocusBody != focusBody) {
+			focusPos *= (bodyRadii[focusBody] / bodyRadii[lastFocusBody]);
+			Position = *bodyPos[focusBody] + focusPos;
+			lastFocusBody = focusBody;
 		}
 	}
 }
+
 
 
 bool Camera::keyPress(GLFWwindow* window, int key) { // only works for alphabetical keys

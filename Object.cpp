@@ -115,8 +115,8 @@ void Object::Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat gr
 
 void Object::Sphere(float radius, GLfloat red, GLfloat green, GLfloat blue) {
 	// Vertices
-	const int petals = 96;
-	const int breakpts = 16; // number of theta divisions from axial vertex to equator
+	const int petals = 96; 
+	const int breakpts = 16; // number of theta divisions from pole to equator
 	// axial vertex, 1st breakpt norms, middle breakpt norms, equator norms, all * 2
 	const int arrayNum = 2 * (petals + (petals * 5) + (petals * 6 * (breakpts - 1)) + (petals * 3)); // buffer overrun
 	Vertex sphV[arrayNum] = {};
