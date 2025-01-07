@@ -1,7 +1,7 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include <glad/glad.h>
+
 #include <stdlib.h>
 #include <vector>
 #include <string>
@@ -39,9 +39,11 @@ public:
 	// render shadow maps
 	void ShadowRender(std::vector<Mesh*> &bodies, Camera* camera);
 	// move bodies
-	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec);
+	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos);
 	// render skybox
 	void RenderSkyBox(Camera* camera);
+	// update screen size
+	void updateWindowSize(int width, int height);
 };
 
 #endif

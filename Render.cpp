@@ -2,6 +2,8 @@
 
 unsigned int loadCubeMap(std::vector<const char*> faces);
 
+glm::mat4 mat4Mult(glm::mat4 A, glm::mat4 B);
+
 RenderSet::RenderSet(GLFWwindow* window, Camera& camera, int width, int height) {
 	RenderSet::window = window;
 	RenderSet::camera = &camera;
@@ -106,7 +108,7 @@ void RenderSet::set() {
 	//debug.Activate();
 	//glUniform1i(glGetUniformLocation(debug.ID, "depthMap"), 0);
 
-}
+	}
 
 void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 	// activate shadow shader with above matrix
@@ -123,7 +125,7 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 	// find closest planet to camera (body 0 is the sun and bodies 4 and 8 are not planets)
 	for (int i = 1; i < bodies.size(); i++) {
 		if (i != 4 && i != 8) {
-			float bodyDist = abs(glm::length(camera->Position - bodies[i]->Pos));
+			float bodyDist = abs(glm::length(camera->Position - *(bodies[i]->Pos)));
 			if (distanceToClosest > bodyDist) { // vector to body
 				distanceToClosest = bodyDist;
 				closestBody = i;
@@ -132,8 +134,8 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 	}
 
 	glm::mat4 lightView = glm::lookAt( // has be based on focused body position if a focused body exists
-		bodies[closestBody]->Pos - (7.0f * glm::normalize(bodies[closestBody]->Pos)), // light source position - a fixed distance from the closest planet to camera
-		bodies[closestBody]->Pos, // position looking towards - closest body position
+		*(bodies[closestBody]->Pos) - (7.0f * glm::normalize(*(bodies[closestBody]->Pos))), // light source position - a fixed distance from the closest planet to camera
+		*(bodies[closestBody]->Pos), // position looking towards - closest body position
 		glm::vec3(0.0f, 1.0f, 0.0f));
 
 	lightSpaceMatrix = lightProjection * lightView;
@@ -201,16 +203,87 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 		glBindVertexArray(0);*/
 }
 
-void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec) {
-	// dt is time step for orbit calculation - dt > 1 slows time by factor, dt < 1 speeds time by factor
-
+void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos) {
 	// Every object that orbits must also have a rotate function, if it should not rotate set the first parameter to 0.0f
 	// Object will not be drawn if both functions are not present
+	
+	// Orbit drawing prep
+	uniform_data_t uni;
+	glm::mat4 mvp = camera->cameraMatrix * glm::mat4(1.0); // mult 4x4 glm - non zero, should check shader
+	uni.mvp = &mvp[0][0];
+	glm::vec4 vpt = glm::vec4(0, 0, (float)camera->width, (float)camera->height);
+	uni.viewport = &vpt.z;
+	glm::vec2 aa_radii = glm::vec2(2.0f, 2.0f);
+	uni.aa_radius = &aa_radii.x;
+
+	int closestID = -1;
+	double dist = INT_MAX;
+	for (int i = 1; i < bodies.size(); i++) {
+		double dummyDist = distanceFind(*((*bodies[i]).Pos), cameraPos);
+		if (dummyDist < dist) {
+			dist = dummyDist;
+			closestID = (*bodies[i]).baryID;
+		}
+	}
 
 	for (int i = 1; i < bodies.size(); i++) {
 		for (auto lBody : lBodies) {
 			(*bodies[i]).Rotate(lBody, simTime_sec);
-			(*bodies[i]).Orbit(lBody, simTime_sec);
+			(*bodies[i]).Orbit(lBody, simTime_sec, dt, cameraPos);
+			// update and render lines
+			if ((*bodies[i]).bIdx == -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
+				for (int j = 0; j < (*bodies[i]).lineBufferSize; j++) {
+					(*bodies[i]).lineBuffer[j].col = (*bodies[i]).lineColor;
+				}
+				geom_shdr_lines_update(&(*bodies[i]).pathDevice, &(*bodies[i]).lineBuffer,
+					(*bodies[i]).lineBufferSize, sizeof(vertex_t), &uni);
+				geom_shdr_lines_render(&(*bodies[i]).pathDevice, (*bodies[i]).lineBufferSize);
+			}
+			
+			if ((*bodies[i]).bIdx != -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
+				
+				vertex_t* lB = (*bodies[i]).lineBuffer;
+				vertex* rB = (*bodies[i]).refinedList;
+				const int lBSz = (*bodies[i]).lineBufferSize;
+				const int bID = (*bodies[i]).bIdx;
+				const int rID = (*bodies[i]).rIdx;
+				const int brGap = ((rID - bID + lBSz) % lBSz) - 1; // mising verts between b and r
+				const int llBSize = LINE_BUFF_SIZE + REF_LIST_SIZE;
+				vertex_t llB[llBSize];
+				int rLEndIdx = (*bodies[i]).refListStartIdx - 1 >= 0 ? (*bodies[i]).refListStartIdx - 1 : REF_LIST_SIZE - 1;
+				llB[0] = rB[rLEndIdx]; // circular cap
+				llB[0].col = (*bodies[i]).lineColor;
+				int k = 0, k2 = 0; // secondary index
+
+				// linebuffer implant
+				for (int j = rID; j < lBSz; j++) {
+					llB[k + 1] = lB[j];
+					llB[k + 1].col = (*bodies[i]).lineColor; // update line color
+					k++;
+					if (j == lBSz - 1) j = -1;
+					if (bID == lBSz - 1) {
+						if (j == 0) break;
+					}
+					else {
+						if (j == bID + 1) break;
+					}
+				}
+
+				// refined list implant
+				for (int j = (*bodies[i]).refListStartIdx; j < REF_LIST_SIZE; j++){
+					llB[k + 1] = rB[j];
+					llB[k + 1].col = (*bodies[i]).lineColor; // update line color
+					if (j == REF_LIST_SIZE - 1) j = -1; // handle wrap
+					if (k2 == REF_LIST_SIZE - 2) break;
+					k++;
+					k2++;
+				}
+				
+				geom_shdr_lines_update(&(*bodies[i]).pathDevice, llB,
+					llBSize - brGap + 1, sizeof(vertex_t), &uni);
+				geom_shdr_lines_render(&(*bodies[i]).pathDevice, llBSize - brGap + 1);
+			}
+
 		}
 	}	
 }
@@ -222,6 +295,7 @@ void RenderSet::RenderSkyBox(Camera* camera) {
 	view = glm::lookAt(glm::vec3(0.0f), (*camera).Orientation, (*camera).Up);
 	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
 	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "proj"), 1, GL_FALSE, glm::value_ptr((*camera).proj));
+
 	
 	glBindVertexArray(skyboxVAO);
 	glActiveTexture(GL_TEXTURE0);
@@ -230,6 +304,11 @@ void RenderSet::RenderSkyBox(Camera* camera) {
 	glDrawArrays(GL_TRIANGLES, 0, 36);
 	glBindVertexArray(0);
 	glDepthFunc(GL_LESS);
+}
+
+void RenderSet::updateWindowSize(int width, int height) {
+	RenderSet::screenWidth = width;
+	RenderSet::screenHeight = height;
 }
 
 unsigned int loadCubeMap(std::vector<const char*> faces) {
@@ -260,4 +339,15 @@ unsigned int loadCubeMap(std::vector<const char*> faces) {
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
 	return textureID;
+}
+
+glm::mat4 mat4Mult(glm::mat4 A, glm::mat4 B) {
+	glm::mat4 ans;
+	int i = -1;
+	for (int p = 0; p < 16; p++) {
+		if (p % 4 == 0) i++;
+		int j = p - 4 * i;
+		ans[i][j] = A[0][j] * B[i][0] + A[1][j] * B[i][1] + A[2][j] * B[i][2] + A[3][j] * B[i][3];
+	}
+	return ans;
 }

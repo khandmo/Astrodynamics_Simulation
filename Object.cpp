@@ -115,8 +115,8 @@ void Object::Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat gr
 
 void Object::Sphere(float radius, GLfloat red, GLfloat green, GLfloat blue) {
 	// Vertices
-	const int petals = 96;
-	const int breakpts = 16; // number of theta divisions from axial vertex to equator
+	const int petals = 96; 
+	const int breakpts = 16; // number of theta divisions from pole to equator
 	// axial vertex, 1st breakpt norms, middle breakpt norms, equator norms, all * 2
 	const int arrayNum = 2 * (petals + (petals * 5) + (petals * 6 * (breakpts - 1)) + (petals * 3)); // buffer overrun
 	Vertex sphV[arrayNum] = {};
@@ -246,13 +246,3 @@ void Object::Sphere(float radius, GLfloat red, GLfloat green, GLfloat blue) {
 	std::vector <GLuint> sphElem(sphI, sphI + sizeof(sphI) / sizeof(GLuint));
 	Object::indices = sphElem;
 }
-
-/*
-glm::vec3 sphToCart(glm::vec3 sphCoords) {
-	// turns (r, theta, phi) to (x, y, z)
-	glm::vec3 cartCoords = glm::vec3(0, 0, 0);
-	cartCoords.z = sphCoords.x * sin(sphCoords.y) * cos(sphCoords.z);
-	cartCoords.x = sphCoords.x * sin(sphCoords.y) * sin(sphCoords.z);
-	cartCoords.y = sphCoords.x * cos(sphCoords.y);
-	return cartCoords;
-}*/

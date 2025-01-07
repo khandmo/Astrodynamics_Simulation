@@ -1,21 +1,22 @@
 #include "System.h"
+#include <cstring>
 
+//double distanceFind(glm::vec3 state1, glm::vec3 state2);
 
 System::System() {
-
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
 	// initialize radius as true radius in km divided by a factor of 6100/4550000000 to be consistent with orbital distances
-	bodiesActual.push_back(initBody("sun", "Textures/SQmercury.jpg", glm::vec3(0.0f, 0.0f, 0.0f), 0.9335547255f, 0.0f, 0.0f, 0.0f, true, false, -1, 10, 10)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
-	bodiesActual.push_back(initBody("mercury", "Textures/SQmercury.jpg", glm::vec3(61.4f, 0.0f, 0.0f), 0.0032708066f, 0.0f, 2, 0.0600068844f, false, false, 0, 1, 199));
-	bodiesActual.push_back(initBody("venus", "Textures/SQvenus.jpg", glm::vec3(143.6f, 0.0f, 0.0f), 0.0081134022f, 0.0f, 3, 0.0434617764f, false, false, 0, 2, 299));
-	bodiesActual.push_back(initBody("earth", "Textures/earth4096.jpg", glm::vec3(200.0f, 0.0f, 0.0f), 0.0085413407f, 0.0f, 23.5, 10.56121166f, false, false, 0, 3, 399));
-	bodiesActual.push_back(initBody("moon", "Textures/moon4096.jpg", glm::vec3(205.229f, 0.0f, 0.0f), 0.00232926115f, 0.0f, 1.5, 0.35800717f, false, false, 3, 301, 301));
-	bodiesActual.push_back(initBody("mars", "Textures/SQmars.jpg", glm::vec3(276.28f, 0.0f, 0.0f), 0.0045441648f, 0.0f, 25, 10.57f, false, false, 0, 4, 499));
-	bodiesActual.push_back(initBody("jupiter", "Textures/SQjupiter.jpg", glm::vec3(990.0f, 0.0f, 0.0f), 0.0937268352f, 0.0f, 3, 25.64f, false, false, 0, 5, 599));
-	bodiesActual.push_back(initBody("saturn", "Textures/SQsaturn.jpg", glm::vec3(1808.0f, 0.0f, 0.0f), 0.0780692747f, 0.0f, 26.73, 23.6886f, false, false, 0, 6, 699));
-	bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", glm::vec3(1808.0f, 0.0f, 0.0f), 0.1005494506f, 0.1876923077f, 26.73, 21.0f, false, true, 0, 6, 699)); 
-	bodiesActual.push_back(initBody("uranus", "Textures/SQuranus.jpg", glm::vec3(3680.0f, 0.0f, 0.0f), 0.0340018022f, 0.0f, 97.7, 14.6939f, false, false, 0, 7, 799));
-	bodiesActual.push_back(initBody("neptune", "Textures/SQneptune.jpg", glm::vec3(5962.0f, 0.0f, 0.0f), 0.0330097143f, 0.0f, 28, 15.8418f, false, false, 0, 8, 899));
+	bodiesActual.push_back(initBody("Sun", "Textures/SQmercury.jpg", 0.9335547255f, 0.0f, 0.0f, 0.0f, true, false, "-1", 10, 10, 0)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
+	bodiesActual.push_back(initBody("Mercury", "Textures/SQmercury.jpg", 0.0032708066f, 0.0f, 2, 0.0600068844f, false, false, "0", 1, 199, 88));
+	bodiesActual.push_back(initBody("Venus", "Textures/SQvenus.jpg", 0.0081134022f, 0.0f, 3, 0.0434617764f, false, false, "0", 2, 299, 225));
+	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 0.0085413407f, 0.0f, 23.5, 10.56121166f, false, false, "0", 3, 399, 365));
+	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 0.00232926115f, 0.0f, 1.5, 0.35800717f, false, false, "3", 301, 301, 27));
+	bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 0.0045441648f, 0.0f, 25, 10.57f, false, false, "0", 4, 499, 687));
+	//bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 0.0937268352f, 0.0f, 3, 25.64f, false, false, "0", 5, 599, 4331));
+	//bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 0.0780692747f, 0.0f, 26.73, 23.6886f, false, false, "0", 6, 699, 10759));
+	//bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", 0.1005494506f, 0.1876923077f, 26.73, 21.0f, false, true, "0", 6, 699, 10759));
+	//bodiesActual.push_back(initBody("Uranus", "Textures/SQuranus.jpg", 0.0340018022f, 0.0f, 97.7, 14.6939f, false, false, "0", 7, 799, 30689));
+	//bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 0.0330097143f, 0.0f, 28, 15.8418f, false, false, "0", 8, 899, 60182));
 	
 	// transplant bodies addresses
 	for (int i = 0; i < bodiesActual.size(); i++) {
@@ -26,8 +27,8 @@ System::System() {
 		else {
 			dullBodies.push_back(bodies[i]);
 		}
-		if (bodies[i]->soiID != -1) {
-			bodies[i]->gravSource = &bodiesActual[bodies[i]->soiID];
+		if (bodies[i]->soiID != "-1"){
+			bodies[i]->gravSource = &bodiesActual[std::stoi(bodies[i]->soiID)];
 		}
 	}
 
@@ -40,8 +41,7 @@ System::System() {
 	updateBodyState(); // shaders stable here
 }
 
-Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, float radius, float outerRadius, float axialTilt, float angleOfRot,  bool isLight, bool areRings, int soiID, int baryID, int spiceID) {
-	
+Mesh System::initBody(const char* name, const char* texFilePath, float radius, float outerRadius, float axialTilt, float angleOfRot,  bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, int orbPeriod) {
 	// init texture
 	Texture tex[] = { Texture(texFilePath, "diffuse", 0, GL_RGB, GL_UNSIGNED_BYTE) };
 
@@ -54,17 +54,15 @@ Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, 
 		obj.Rings(radius, outerRadius, 0.2f, 0.4f, 0.3f);
 	}
 	std::vector <Texture> objTex(tex, tex + sizeof(tex) / sizeof(Texture));
-	glm::vec4 lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f); // default color, dummy for dull bodies
 
 	Shader shader = dS;
 	if (isLight) {
 		shader = lS;
 	}
 
-	Mesh body(name, obj.vertices, obj.indices, objTex, isLight, areRings, lightColor, pos, &shader, baryID, spiceID); // velocity will be updated with SPICE integration
-
-	// Set Properties
-	body.soiID = soiID;
+	SystemTime();
+	Mesh body(name, obj.vertices, obj.indices, objTex, isLight, areRings, &shader, soiID, baryID, spiceID, sysTime.time_in_sec, orbPeriod); // velocity will be updated with SPICE integration
+	// Set Properties	
 	body.AxialTilt(axialTilt);
 	body.radRot = angleOfRot; // assign rotation speed
 	bodyRadii.push_back(radius);
@@ -75,11 +73,10 @@ Mesh System::initBody(const char* name, const char* texFilePath, glm::vec3 pos, 
 void System::updateBodyState() { // System holds it's own positions, gets updated from Mesh --- System triggers Move and calls for velocity from body
 	// update vector of bodyPos in glm vec3 format
 	for (int i = 0; i < bodies.size(); i++) {
-		//std::cout << bodies[i]->name << " update body state shader id " << bodies[i]->ShaderProgram->ID << '\n';
 		if (bodyPos.size() >= i + 1)
-			bodyPos[i] = &(bodies[i]->Pos);
+			bodyPos[i] = (bodies[i]->Pos);
 		else
-			bodyPos.push_back(&(bodies[i]->Pos));
+			bodyPos.push_back((bodies[i]->Pos));
 	}
 }
 
@@ -94,7 +91,73 @@ void System::shaderSet() {
 	}
 }
 
+void System::orbLineHandle(glm::vec3 cameraPos) {
 
+	double distPlanet = INT_MAX, distMoon = INT_MAX, dist;
+	int planetIdx, moonIdx;
+	for (int i = 0; i < dullBodies.size(); i++) {
+		dist = distanceFind(*(dullBodies[i]->Pos), cameraPos);
+		if (dist < distPlanet) {
+			if (dullBodies[i]->isMoon) {
+				distMoon = dist;
+				moonIdx = i;
+			}
+			else {
+				distPlanet = dist;
+				planetIdx = i;
+			}
+		}
+	}
+
+	float planetDistLowBound = 3, planetDistHighBound = 15, planetDistLowLowBound = 1.4f;
+	float moonDistLowBound = 0.08f, moonDistHighBound = 0.4f; // *********** should use radius for these to scale, should make opacity calc helper fxn
+	float brightColor = 0.5f;
+	float dimColor = 0.1f;
+
+
+	if (distPlanet > planetDistHighBound) { // far from any bodies
+		for (auto body : dullBodies) {
+			(body->lineColor).w = brightColor;
+		}
+	}
+	else if (distPlanet > planetDistLowBound) { // function scale light color change, mid range
+		
+		float scale = planetDistHighBound - planetDistLowBound;
+		float scaleAmt = distPlanet - planetDistLowBound;
+		float opacityValue = ((scaleAmt / scale) * (brightColor - dimColor)) + dimColor;
+
+		for (auto body : dullBodies) {
+			(body->lineColor).w = opacityValue;
+			if (body->isMoon) {
+				(body->lineColor).w = brightColor - opacityValue;
+			}
+		}
+
+	}
+	else if (distPlanet < planetDistLowBound) { // very close to a body
+		float scale = planetDistLowBound - planetDistLowLowBound;
+		float scaleAmt = distPlanet - planetDistLowLowBound;
+		float opacityValue = ((scaleAmt / scale) * dimColor);
+
+		for (auto body : dullBodies) {
+			if (opacityValue > 0) (body->lineColor).w = opacityValue;
+			else (body->lineColor).w = 0;
+			
+			if (body->isMoon) (body->lineColor).w = brightColor;
+			
+			
+		}
+	}
+	if (distMoon < moonDistHighBound && distMoon > moonDistLowBound) {
+		float scale = moonDistHighBound - moonDistLowBound;
+		float scaleAmt = distMoon - moonDistLowBound;
+		float opacityValue = ((scaleAmt / scale) * brightColor);
+		dullBodies[moonIdx]->lineColor.w = opacityValue;
+	}
+	else if (distMoon < moonDistLowBound) {
+		dullBodies[moonIdx]->lineColor.w = 0;
+	}
+}
 
 // time functions
 
@@ -167,7 +230,7 @@ void System::WarpClockSet(const int currWarp) {
 			(simTime.timeUnit).time_since_epoch().count();
 
 		sysTime = currTime;
-		std::cout << simTime.timeString << '\n';
+		//std::cout << simTime.timeString << '\n';
 	}
 }
 
@@ -177,3 +240,4 @@ void System::WarpClockSet(const int currWarp) {
 void System::deleteSystem() {
 
 }
+

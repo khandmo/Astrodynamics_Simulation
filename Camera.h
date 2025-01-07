@@ -12,6 +12,9 @@
 
 
 #include "Shaders.h"
+#include "GUI.h"
+
+#define NORM_SPEED 0.01f
 
 /*
 The camera class handles the manipulation of the camera matrices for position and orientation. It also handles
@@ -22,10 +25,10 @@ class Camera {
 public:
 	int cameraViewCycle = 0;
 	bool focusMode = false;
+	bool lastFocusMode = false;
+	int lastFocusBody = 0;
 	int focusBody = 0;
 	glm::vec3 focusPos = glm::vec3(3.0f, 0.0f, 0.0f);
-	float focusDistSeg[50];
-	int focusDistMarker = 20;
 
 	glm::vec3 Position;
 	glm::vec3 OrigPos;
@@ -43,12 +46,14 @@ public:
 	int width;
 	int height;
 
-	float speed = 0.01f;
+	float speed = NORM_SPEED;
 	float sensitivity = 100.0f;
 
 	Camera(int width, int height, glm::vec3 position);
 
 	void updateMatrix(float FOVdeg, float nearPlane, float farPlane);
+
+	void updateWindowSize(int width, int height);
 
 	void Matrix(Shader& shader, const char* uniform);
 	
