@@ -255,9 +255,6 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, do
 				llB[0].col = (*bodies[i]).lineColor;
 				int k = 0, k2 = 0; // secondary index
 
-				if (bodies[i]->lineColor.w == 0)
-					continue;
-
 				// linebuffer implant
 				for (int j = rID; j < lBSz; j++) {
 					llB[k + 1] = lB[j];

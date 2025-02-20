@@ -12,7 +12,6 @@
 
 class ArtSat;
 class Mesh;
-class Camera;
 
 class System {
 public:
@@ -24,8 +23,7 @@ public:
 	std::vector<glm::vec3*> bodyPos; // for camera interface
 	std::vector <float> bodyRadii; // for camera
 
-	std::vector<ArtSat> artSats;
-	std::vector<glm::vec3*> satPos; // for camera
+	std::vector<ArtSat*> artSats;
 
 
 	Shader dS = Shader("default.vert", "default.frag");
@@ -49,8 +47,8 @@ public:
 	// generates body given, shaderType toggles emission/dull shader modes, adds bodies to pertenant lists
 	Mesh initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, int orbPeriod);
 
-	// passive satellite handling
-	void ArtSatHandle(std::vector<Mesh*> bodies, Camera* camera, double* dt);
+	// passes ArtSat on save to system
+	void ArtSatHandle();
 
 	void updateBodyState(); // handles input during application run-time
 

@@ -503,21 +503,20 @@ void stateChange(SpiceDouble* state) {
 	state[3] = posVec.y; state[4] = posVec.z; state[5] = posVec.x;
 }
 
-void stateChange(glm::dvec3* pos, glm::dvec3* vel) {
+void stateChange(glm::vec3* pos, glm::vec3* vel) {
 	for (int i = 0; i < 3; i++) {
 		(*pos)[i] = (*pos)[i] * LENGTH_SCALE;
 		(*vel)[i] = (*vel)[i] * LENGTH_SCALE;
 	}
-	glm::dmat4 rotationMatrix = glm::rotate(glm::dmat4(1.0), -23.4, glm::dvec3(1.0, 0, 0));
-	*pos = rotationMatrix * glm::dvec4(*pos, 1.0);
-	*vel = rotationMatrix * glm::dvec4(*vel, 1.0);
-	/*
-	double dummy = 0.0;
+	*pos = glm::rotateX(*pos, glm::radians(-23.4f));
+	*vel = glm::rotateX(*vel, glm::radians(-23.4f));
+	
+	float dummy = 0.0f;
 	dummy = (*pos)[0]; (*pos)[0] = (*pos)[1];
 	(*pos)[1] = (*pos)[2]; (*pos)[2] = dummy;
 
 	dummy = (*vel)[0]; (*vel)[0] = (*vel)[1];
-	(*vel)[1] = (*vel)[2]; (*vel)[2] = dummy;*/
+	(*vel)[1] = (*vel)[2]; (*vel)[2] = dummy;
 }
 
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {

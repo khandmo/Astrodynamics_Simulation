@@ -1,7 +1,5 @@
 #include "GUI.h"
 
-char* secToDay(double dt);
-
 GUI::GUI(GLFWwindow* window, GUIData guiData) {
 
 	IMGUI_CHECKVERSION();
@@ -15,7 +13,7 @@ GUI::GUI(GLFWwindow* window, GUIData guiData) {
 
 	bodyNames = new const char*[guiData.bodies.size()]; // delete this in deconstructor
 	int counter = 0;
-	for (auto& body : guiData.bodies) {
+	for (auto body : guiData.bodies) {
 		if (!body->areRings) {
 			bodyNames[counter] = body->name;
 			counter++;
@@ -23,13 +21,6 @@ GUI::GUI(GLFWwindow* window, GUIData guiData) {
 	}
 	bodyNamesLen = counter;
 
-	counter = 0;
-	satNames = new const char* [guiData.artSatAll->size()];
-	for (auto& sat : *guiData.artSatAll) {
-		satNames[counter] = sat.name;
-		counter++;
-	}
-	satNamesLen = counter;
 }
 
 void GUI::guiLoopStart(GUIData guiData) {
@@ -96,93 +87,16 @@ void GUI::guiLoopADS(GUIData guiData) {
 	if (ImGui::Button("Kill TimeWarp"))
 		*(guiData.tW) = 15;
 
-
-
-
 	ImGui::SeparatorText("FOCUS CONTROL");
-	if (ImGui::Button("Planet Focus")) { // wish i could change this str from focus to free when clicked to toggle
-		if (guiData.camera->focusMode == false)
-			guiData.camera->focusMode = true;
-		else if (focusType == 1)
-			guiData.camera->focusMode = false;
-		guiData.camera->focusBody = 0;
-		focusType = 1;
-	}
+	if (ImGui::Button("Focus Mode")) // wish i could change this str from focus to free when clicked to toggle
+		guiData.camera->focusMode = !(guiData.camera->focusMode);
 
-	ImGui::SameLine();
-	if (ImGui::Button("Sat Focus")) { // wish i could change this str from focus to free when clicked to toggle
-		if (guiData.artSatAll->size() > 0) {
-			if (guiData.camera->focusMode == false)
-				guiData.camera->focusMode = true;
-			else if (focusType == 2)
-				guiData.camera->focusMode = false;
-			guiData.camera->focusBody = -1;
-			focusType = 2;
-		}
-	}
-
-
-	if (guiData.camera->focusMode && focusType == 1) {
-		if (guiData.camera->focusBody < 0)
-			guiData.camera->focusBody = 0;
+	// focuslist should only show when focusmode is true
+	if (guiData.camera->focusMode) {
 		ImGui::Combo("Body Select", &(guiData.camera->focusBody), bodyNames, bodyNamesLen);
 	}
 
-	if (guiData.camera->focusMode && focusType == 2) {
-		if (guiData.camera->focusBody > -1)
-			guiData.camera->focusBody = -1;
-
-		int focusIndex = -guiData.camera->focusBody - 1;
-		ImGui::Combo("Sat Select", &focusIndex, satNames, satNamesLen);
-	}
-
-	if (guiData.camera->focusMode == false)
-		focusType = 0;
-
-
-
-
-
 	ImGui::SeparatorText("ART SAT CONTROL");
-
-	if (focusType == 2) {
-		ArtSat* currSat = &(*guiData.artSatAll)[-guiData.camera->focusBody - 1];
-
-		// focus sat info - apo/peri, time to each, MET, orbital period, maneuver info, maneuver button, refresh button
-		ImGui::Text("Altitude: %.2f km", currSat->stat->distToSoi);
-		ImGui::Text("Apoapsis: %.2f km", currSat->stat->apoapsis);
-		ImGui::Text("\tTime To: %s", secToDay(currSat->stat->timeToApo));
-		ImGui::Text("Periapsis: %.2f km", currSat->stat->periapsis);
-		ImGui::Text("\tTime To: %s", secToDay(currSat->stat->timeToPeri));
-		ImGui::Text("MET: %.f s", currSat->stat->MET);
-		ImGui::Text("Orbital Period: %s", secToDay(currSat->stat->orbitalPeriod));
-
-
-
-		if (ImGui::Button("Refresh Orbit")) {
-			currSat->refreshTraj(guiData.bodies, *guiData.simTime);
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("New Maneuver")) {
-			newMan = true;
-			newManDt = *guiData.simTime;
-			// modify init values of v stats
-
-		}
-		if (newMan){
-			// need some way to distinguish where along the orbital path the maneuver will happen - the more accurate
-			// the initial pv, the more robust maneuvers will be
-
-			ImGui::SliderFloat("Time", &manDt, 0, currSat->stat->orbitalPeriod, "ratio = %d");
-			ImGui::SliderFloat("Velocity", &vMag, 0, 12, "ratio = %.2f");
-			ImGui::SliderFloat("Pitch", &vTheta, 0, glm::pi<float>(), "ratio = %.2f"); // init based on current state velocity
-			ImGui::SliderFloat("Yaw", &vPhi, 0, 2 * glm::pi<float>(), "ratio = %.2f");
-			glm::vec3 cartDummy = sphToCart(glm::dvec3(vMag, vTheta, vPhi));
-			pv->Vel = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y };
-
-			currSat->ArtSatManeuver(cartDummy, guiData.bodies, newManDt + manDt);
-		}
-	}
 
 	
 	if (ImGui::Button("New Artificial Satellite")) {
@@ -193,57 +107,42 @@ void GUI::guiLoopADS(GUIData guiData) {
 	if (newArtSat) {
 		// should init positions in spherical coordinates and velocity in cartesian
 		// transfer to cartesian and plug into a pvUnit for Plan
-
-		static char str0[30] = "Untitled Spacecraft 1"; // word input, also use to display info
-		ImGui::InputText("Name", str0, IM_ARRAYSIZE(str0));
 		
-		ImGui::SliderInt("r", &r, 300, 10000, "ratio = %30");
+		// could stop time while newArtSat is true
+		/*
+		cool orbit
+		14908.5 0 -2916.72
+		-1.04933 2.29283 -5.33403
+		*/
+		//************************ position sliders dont work (theta / phi)
+		ImGui::SliderInt("r", &r, 300, 10000, "ratio = %10");
 		//ImGui::SameLine();
 		ImGui::SliderFloat("theta", &theta, 0, glm::pi<float>(), "ratio = %.2f");
 		//ImGui::SameLine();
 		ImGui::SliderFloat("phi", &phi, 0, 2 * glm::pi<float>(), "ratio = %.2f");
 
-		ImGui::SliderFloat("Velocity", &vMag, 6, 12, "ratio = %.2f");
+		ImGui::SliderFloat("Velocity", &vMag, 1, 9, "ratio = %.2f");
 		//ImGui::SameLine();
 		ImGui::SliderFloat("Pitch", &vTheta, 0, glm::pi<float>(), "ratio = %.2f");
 		//ImGui::SameLine();
 		ImGui::SliderFloat("Yaw", &vPhi, 0, 2 * glm::pi<float>(), "ratio = %.2f");
 		
 		glm::vec3 cartDummy = sphToCart(glm::vec3(r + guiData.bodies[3]->realRadius, theta, phi));
-		pv->Pos = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y};
-		cartDummy = sphToCart(glm::dvec3(vMag, vTheta, vPhi));
-		pv->Vel = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y };
+		pv->Pos = glm::vec3{ cartDummy.z, cartDummy.x, cartDummy.y};
+		cartDummy = sphToCart(glm::vec3(vMag, vTheta, vPhi));
+		pv->Vel = glm::vec3{ cartDummy.z, cartDummy.x, cartDummy.y };
 		sat->ArtSatPlan(*pv, *(guiData.simTime), 3, guiData.bodies);
-		sat->ArtSatUpdState(guiData.bodies, *guiData.simTime);
-		sat->ArtSatRender(guiData.camera, *(guiData.bodies[0]));
+		
 
 		// reset art sat parameters to default values in each, delete pvUnit as well
 		if (ImGui::Button("Save")) {
-			bool repeatName = false;
-			for (auto& someSat : *guiData.artSatAll) {
-				if (someSat.name == str0) repeatName = true;
-			}
-			if (!repeatName) {
-				sat->name = str0;
-				guiData.artSatAll->push_back(*sat);
-				sat = nullptr;
-				pv = nullptr;
-				newArtSat = false;
-
-				// change sat focus list 
-				delete satNames;
-				int counter = 0;
-				satNames = new const char* [guiData.artSatAll->size()];
-				for (auto& someSat : *guiData.artSatAll) {
-					satNames[counter] = someSat.name;
-					counter++;
-				}
-				satNamesLen = counter;
-			}
+			sat->ArtSatSave();
+			newArtSat = false;
+			
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Discard")) {
-			sat->~ArtSat();
+			sat->deleteArtSat();
 			newArtSat = false;
 		}
 		if (ImGui::Button("Print Orbit")) {
@@ -300,42 +199,12 @@ void GUI::guiLoopEnd(GUIData guiData) {
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	if (newArtSat) {
-		sat->ArtSatRender(guiData.camera, *(guiData.bodies[0]));
+		sat->ArtSatRender(guiData.camera);
 	}
 }
 
 void GUI::guiDestroy() {
-	delete bodyNames;
-	delete satNames;
-
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
-}
-
-char* secToDay(double dt) {
-
-	int min = 60;
-	int hour = 60;
-	int day = 24;
-
-	int numMin = 0;
-	int numHour = 0;
-	int numDay = 0;
-
-	while (dt > day * hour * min) {
-		dt -= (day * hour * min);
-		numDay++;
-	}
-	while (dt > hour * min) {
-		dt -= (hour * min);
-		numHour++;
-	}
-	while (dt > min) {
-		dt -= min;
-		numMin++;
-	}
-	static char res[30];
-	sprintf(res, "%dd, %dh, %dm, %ds", numDay, numHour, numMin, (int)dt);
-	return res;
 }

@@ -68,7 +68,7 @@ int main() {
 
 	Sys.SystemTime();
 
-	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, &Sys.simTime.time_in_sec, Sys.bodies, &camera, &Sys.artSats};
+	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, &Sys.simTime.time_in_sec, Sys.bodies, &camera};
 	GUI gui(window, guiData);
 
 	std::cout << "beginning sim" << std::endl; 
@@ -90,9 +90,9 @@ int main() {
 
 		// input handling -  should add input for safe obliteration (cease while loop)
 		// for holding inputs
-		(camera).smoothInputs(window, Sys.bodyPos, &Sys.satPos);
+		(camera).smoothInputs(window, Sys.bodyPos);
 		// for single click inputs - must change dt bounds here if dtRange size changes
-		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, &Sys.satPos, skyboxOn, dt);
+		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, skyboxOn, dt);
 		// values to be able to see the sun from neptune and handle resized windows
 		(camera).updateWindowSize(data.width, data.height);
 		(camera).updateMatrix(45.0f, 0.001f, 6100.0f);
@@ -106,11 +106,8 @@ int main() {
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
 		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, dt, (camera).Position);
-		
-		//Handle changes
+		//Handle line changes
 		Sys.orbLineHandle((camera).Position);
-		Sys.ArtSatHandle(Sys.bodies, &camera, &Sys.simTime.time_in_sec);
-
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
 		}

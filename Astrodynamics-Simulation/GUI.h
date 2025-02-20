@@ -22,8 +22,6 @@ struct GUIData {
 	std::vector <Mesh*> bodies;
 
 	Camera* camera;
-
-	std::vector<ArtSat> *artSatAll;
 };
 
 
@@ -33,25 +31,16 @@ public:
 	const char** bodyNames = nullptr;
 	int bodyNamesLen;
 
-	const char** satNames = nullptr;
-	int satNamesLen;
-
-	int focusType = 0; // locally designates difference between planet and sat focus
-
 	ArtSat* sat;
 	pvUnit* pv;
 
 	bool newArtSat = false;
-	bool newMan = false;
 	// new artificial satellite parameters
-	int r = 300; float vMag = 10.85; // km, km/s
+	int r = 300; float vMag = 8.5; // km, km/s
 	float theta = glm::pi<float>() / 2; // from pole (equatorial orbit)
 	float phi = 0;
 	float vTheta = glm::pi<float>() / 2;
-	float vPhi = (3 * glm::pi<float>()) / 2;
-	
-	float newManDt = 0;
-	float manDt = 0;
+	float vPhi = glm::pi<float>() / 2;
 
 	GUI(GLFWwindow* window, GUIData guiData);
 

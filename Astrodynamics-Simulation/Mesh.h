@@ -33,7 +33,7 @@ double distanceFind(std::vector<double> pt1, std::vector<double> pt2);
 double distanceFind(glm::vec3 state1, SpiceDouble* state2);
 double distanceFind(glm::vec3 state1, glm::vec3 state2);
 void stateChange(SpiceDouble* state); // changes SpiceDoubule state[0-2] data from real life to simulation environment
-void stateChange(glm::dvec3* pos, glm::dvec3* vel);
+void stateChange(glm::vec3* pos, glm::vec3* vel);
 
 class Mesh {
 public:

@@ -30,8 +30,6 @@ public:
 	int lastFocusBody = 0;
 	int focusBody = 0;
 	glm::vec3 focusPos = glm::vec3(3.0f, 0.0f, 0.0f);
-	glm::vec3 defaultFocus = glm::vec3(8.0f, 0.0f, 0.0f);
-	glm::vec3 defaultSatFocus = glm::vec3(.05f, 0, 0);
 
 	glm::vec3 Position;
 	glm::vec3 OrigPos;
@@ -60,9 +58,9 @@ public:
 
 	void Matrix(Shader& shader, const char* uniform);
 	
-	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, std::vector<glm::vec3*>* satList);
+	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos);
 
-	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii, std::vector<glm::vec3*>* satList, bool& skybox, int& dt);
+	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii, bool& skybox, int& dt);
 
 	// handles press and release for robust button press recognition
 	bool keyPress(GLFWwindow* window, int key);

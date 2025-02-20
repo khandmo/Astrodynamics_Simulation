@@ -47,9 +47,9 @@ void Object::Box(GLfloat length, GLfloat red, GLfloat green, GLfloat blue) {
 	Object::vertices = boxVert;
 
 
-	// Indices (every new vertex is seperated by 3)
+	// Indices (every new vertex is seperated by 3
 
-	std::vector <GLuint> boxI = { // 6 faces * 2 triangles each * 3 vertices each
+	GLuint boxI[36] = { // 6 faces * 2 triangles each * 3 vertices each
 		// for each vertex in boxV the norms are in x,y,z order - the front/back uses z, top/bottom uses y, right/left uses x
 		2, 5, 8, 5, 8, 11, // front face (z, +2)
 		14, 17, 20, 17, 20, 23, // back face (z, +2)
@@ -58,8 +58,8 @@ void Object::Box(GLfloat length, GLfloat red, GLfloat green, GLfloat blue) {
 		0, 12, 3, 3, 15, 12, // right face (x, +0)
 		6, 18, 9, 9, 21, 18 // left face (x, +0)
 	};
-	//std::vector <GLuint> boxElem(boxI, boxI + sizeof(boxI) / sizeof(GLuint));
-	Object::indices = boxI;
+	std::vector <GLuint> boxElem(boxI, boxI + sizeof(boxI) / sizeof(GLuint));
+	Object::indices = boxElem;
 }
 
 // there is a somewhat noticable seam in the rings but my mental arithmetic can't explain why, the texures should always be within bounds

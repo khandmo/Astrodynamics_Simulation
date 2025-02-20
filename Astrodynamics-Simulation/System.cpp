@@ -72,18 +72,10 @@ Mesh System::initBody(const char* name, const char* texFilePath, float mass, flo
 	return body;
 }
 
-void System::ArtSatHandle(std::vector<Mesh*> bodies, Camera* camera, double* dt) {
+void System::ArtSatHandle() {
 	// get info from GUI
 
 
-	for (int i = 0; i < artSats.size(); i++) {
-		artSats[i].ArtSatUpdState(bodies, *dt);
-		artSats[i].ArtSatRender(camera, *(bodies[0]));
-		if (i < satPos.size())
-			satPos[i] = &artSats[i].simPos;
-		else
-			satPos.push_back(&artSats[i].simPos);
-	}
 
 
 	// need handler for maneuver / passive render
