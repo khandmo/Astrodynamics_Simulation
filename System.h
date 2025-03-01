@@ -14,6 +14,13 @@ class ArtSat;
 class Mesh;
 class Camera;
 
+struct state {
+	double time;
+	char* date;
+	glm::vec3 pos;
+	glm::vec3 vel;
+};
+
 class System {
 public:
 
@@ -49,8 +56,11 @@ public:
 	// generates body given, shaderType toggles emission/dull shader modes, adds bodies to pertenant lists
 	Mesh initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, int orbPeriod);
 
+	// generates real missions based on ephemeris data
+	void initSat(const char* name, const char* eph, std::vector<ArtSat>& artSats);
+
 	// passive satellite handling
-	void ArtSatHandle(std::vector<Mesh*> bodies, Camera* camera, double* dt);
+	void ArtSatHandle(std::vector<Mesh*> bodies, Camera* camera, double dt, int tW);
 
 	void updateBodyState(); // handles input during application run-time
 
@@ -71,6 +81,9 @@ public:
 
 	// sets sim clock appropriate, takes warp speed into account
 	void WarpClockSet(int currWarp);
+
+	// set sim clock to specific value
+	void ArgClockSet(double dt);
 };
 #endif 
  

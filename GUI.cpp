@@ -1,6 +1,7 @@
 #include "GUI.h"
 
 char* secToDay(double dt);
+void arrowToggle(float& value, bool isInt);
 
 GUI::GUI(GLFWwindow* window, GUIData guiData) {
 
@@ -92,7 +93,6 @@ void GUI::guiLoopADS(GUIData guiData) {
 	ImGui::SameLine();
 	ImGui::Text("Date : %s", guiData.time);
 
-	// add kill time warp button
 	if (ImGui::Button("Kill TimeWarp"))
 		*(guiData.tW) = 15;
 
@@ -100,7 +100,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 
 	ImGui::SeparatorText("FOCUS CONTROL");
-	if (ImGui::Button("Planet Focus")) { // wish i could change this str from focus to free when clicked to toggle
+	if (ImGui::Button("Planet Focus")) {
 		if (guiData.camera->focusMode == false)
 			guiData.camera->focusMode = true;
 		else if (focusType == 1)
@@ -110,7 +110,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 	}
 
 	ImGui::SameLine();
-	if (ImGui::Button("Sat Focus")) { // wish i could change this str from focus to free when clicked to toggle
+	if (ImGui::Button("Sat Focus")) {
 		if (guiData.artSatAll->size() > 0) {
 			if (guiData.camera->focusMode == false)
 				guiData.camera->focusMode = true;
@@ -132,8 +132,9 @@ void GUI::guiLoopADS(GUIData guiData) {
 		if (guiData.camera->focusBody > -1)
 			guiData.camera->focusBody = -1;
 
-		int focusIndex = -guiData.camera->focusBody - 1;
-		ImGui::Combo("Sat Select", &focusIndex, satNames, satNamesLen);
+		 // ************ isnt going to work, need way to access index without the math
+		ImGui::Combo("Sat Select", &satFocusIndex, satNames, satNamesLen);
+		guiData.camera->focusBody = -1 - satFocusIndex;
 	}
 
 	if (guiData.camera->focusMode == false)
@@ -143,46 +144,133 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 
 
+
+
 	ImGui::SeparatorText("ART SAT CONTROL");
 
 	if (focusType == 2) {
 		ArtSat* currSat = &(*guiData.artSatAll)[-guiData.camera->focusBody - 1];
+		ArtSat* someSat = currSat;
+		
+		if (copySat != nullptr)
+			someSat = copySat;
+		if (manList == nullptr || guiData.camera->focusBody != guiData.camera->lastFocusBody || 
+			manListLen != currSat->maneuvers.size()) {
+
+			if (manList != nullptr) delete manList;
+			manListLen = currSat->maneuvers.size();
+			manList = new const char* [manListLen];
+			for (int i = 0; i < currSat->maneuvers.size(); i++) {
+				manList[i] = currSat->maneuvers[i].name;
+			}
+		}
 
 		// focus sat info - apo/peri, time to each, MET, orbital period, maneuver info, maneuver button, refresh button
-		ImGui::Text("Altitude: %.2f km", currSat->stat->distToSoi);
-		ImGui::Text("Apoapsis: %.2f km", currSat->stat->apoapsis);
-		ImGui::Text("\tTime To: %s", secToDay(currSat->stat->timeToApo));
-		ImGui::Text("Periapsis: %.2f km", currSat->stat->periapsis);
-		ImGui::Text("\tTime To: %s", secToDay(currSat->stat->timeToPeri));
-		ImGui::Text("MET: %.f s", currSat->stat->MET);
-		ImGui::Text("Orbital Period: %s", secToDay(currSat->stat->orbitalPeriod));
+		ImGui::Text("Altitude: %.2f km", someSat->stat->distToSoi);
+		ImGui::Text("Apoapsis: %.2f km", someSat->stat->apoapsis);
+		ImGui::Text("\tTime To: %s", secToDay(someSat->stat->timeToApo));
+		ImGui::Text("Periapsis: %.2f km", someSat->stat->periapsis);
+		ImGui::Text("\tTime To: %s", secToDay(someSat->stat->timeToPeri));
+		ImGui::Text("MET: %s", secToDay(someSat->stat->MET));
+		ImGui::Text("Orbital Period: %s", secToDay(someSat->stat->orbitalPeriod));
 
+		// list (*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[]
+		// show stats of maneuver when selected as well as go to button
+		
+		if (ImGui::Button("Show Maneuvers")) {
+			showMan = !showMan;
+			manListCurr = 0;
+		}
 
+		if (showMan) {
+			ImGui::Combo("->", &manListCurr, manList, manListLen);
+			ImGui::SameLine();
+			if (ImGui::Button("Go-To")) { 
+				goToManTime = currSat->maneuvers[manListCurr].time;
+			}
+
+			ImGui::Text("%s", (*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[manListCurr].desc);
+			//ImGui::Text("deltaV: %.2f ", (*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[manListCurr].deltaV);
+			ImGui::Text("Burn at %s", secToDay((*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[manListCurr].time));
+			// not seconds to day here, want date and time
+		}
 
 		if (ImGui::Button("Refresh Orbit")) {
 			currSat->refreshTraj(guiData.bodies, *guiData.simTime);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("New Maneuver")) {
+			if (newMan == true) {
+				newMan = false;
+				delete copySat;
+				copySat = nullptr;
+				return;
+			}
 			newMan = true;
-			newManDt = *guiData.simTime;
-			// modify init values of v stats
+			newManDt = *guiData.simTime + (60 * 5);
+			copySat = new ArtSat();
+			*copySat ^ *currSat;
+			
 
 		}
-		if (newMan){
-			// need some way to distinguish where along the orbital path the maneuver will happen - the more accurate
-			// the initial pv, the more robust maneuvers will be
+		if (newMan){ // maneuver logic
 
-			ImGui::SliderFloat("Time", &manDt, 0, currSat->stat->orbitalPeriod, "ratio = %d");
-			ImGui::SliderFloat("Velocity", &vMag, 0, 12, "ratio = %.2f");
-			ImGui::SliderFloat("Pitch", &vTheta, 0, glm::pi<float>(), "ratio = %.2f"); // init based on current state velocity
-			ImGui::SliderFloat("Yaw", &vPhi, 0, 2 * glm::pi<float>(), "ratio = %.2f");
-			glm::vec3 cartDummy = sphToCart(glm::dvec3(vMag, vTheta, vPhi));
-			pv->Vel = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y };
+			static char str0[30] = "maneuver 1"; // modify to tick up with amt of maneuvers
+			ImGui::InputText("Name", str0, IM_ARRAYSIZE(str0));
 
-			currSat->ArtSatManeuver(cartDummy, guiData.bodies, newManDt + manDt);
+			static char str1[30] = "";
+			ImGui::InputText("Description", str1, IM_ARRAYSIZE(str1));
+
+			ImGui::SliderFloat("Time", &manDt, 0, currSat->stat->orbitalPeriod, "%.f s");
+			ImGui::SameLine();
+			arrowToggle(manDt, true);
+			if (manDt < 0) manDt += currSat->stat->orbitalPeriod;
+
+			manData[0] *= 1000;
+			ImGui::SliderFloat("Velocity", &manData[0], 0, 8000, "%.2f m/s"); // ******** need way to burn retrograde
+			ImGui::SameLine();
+			arrowToggle(manData[0], true);
+			if (manData[0] < 0) manData[0] += 12;
+			manData[0] /= 1000;
+
+			ImGui::SliderFloat("Pitch", &manData[1], 0, glm::pi<float>(), "%.2f rad");
+			ImGui::SameLine();
+			arrowToggle(manData[1], false);
+			if (manData[1] < 0) manData[1] += glm::pi<float>();
+
+			ImGui::SliderFloat("Yaw", &manData[2], 0, 2 * glm::pi<float>(), "%.2f rad");
+			ImGui::SameLine();
+			arrowToggle(manData[2], false);
+			if (manData[2] < 0) manData[2] += 2 * glm::pi<float>();
+
+			// maneuver step can take .7 seconds, delete & new can take .001 seconds, everything else very quick
+			// if maneuver changed do new calculation
+			if (oldManDt != manDt || oldManData != manData) {
+				delete copySat;
+				copySat = new ArtSat();
+				*copySat ^ *currSat;
+				copySat->ArtSatManeuver(manData, guiData.bodies, newManDt + manDt, str0, str1);
+			}
+			// render and update ( add modifier to change orbit color, fade, + update and render actual sat at same time )
+			copySat->ArtSatUpdState(guiData.bodies, *guiData.simTime, *guiData.tW, 1); // right time????
+
+			oldManDt = manDt;
+			oldManData = manData;
+			// save maneuver
+			if (ImGui::Button("Save Maneuver")) {
+				currSat->maneuvers.push_back({ (copySat->maneuvers[copySat->maneuvers.size() - 1].origState), 
+					(copySat->maneuvers[copySat->maneuvers.size() - 1].newState), newManDt + manDt, str0, str1});
+				delete copySat;
+				copySat = nullptr;
+				newMan = false;
+			}
 		}
 	}
+
+
+
+
+
 
 	
 	if (ImGui::Button("New Artificial Satellite")) {
@@ -190,32 +278,53 @@ void GUI::guiLoopADS(GUIData guiData) {
 		sat = new ArtSat();
 		pv = new pvUnit;
 	}
-	if (newArtSat) {
-		// should init positions in spherical coordinates and velocity in cartesian
-		// transfer to cartesian and plug into a pvUnit for Plan
+	if (newArtSat) { // new satellite logic
 
 		static char str0[30] = "Untitled Spacecraft 1"; // word input, also use to display info
 		ImGui::InputText("Name", str0, IM_ARRAYSIZE(str0));
 		
-		ImGui::SliderInt("r", &r, 300, 10000, "ratio = %30");
-		//ImGui::SameLine();
-		ImGui::SliderFloat("theta", &theta, 0, glm::pi<float>(), "ratio = %.2f");
-		//ImGui::SameLine();
-		ImGui::SliderFloat("phi", &phi, 0, 2 * glm::pi<float>(), "ratio = %.2f");
-
-		ImGui::SliderFloat("Velocity", &vMag, 6, 12, "ratio = %.2f");
-		//ImGui::SameLine();
-		ImGui::SliderFloat("Pitch", &vTheta, 0, glm::pi<float>(), "ratio = %.2f");
-		//ImGui::SameLine();
-		ImGui::SliderFloat("Yaw", &vPhi, 0, 2 * glm::pi<float>(), "ratio = %.2f");
+		int dummy = (int)initPos[0];
+		ImGui::SliderInt("r", &dummy, 300, 10000, "%d km"); // when r changes, vMag should change to keep the same orbital energy over some threshold
+		initPos[0] = dummy;
+		ImGui::SameLine();
+		arrowToggle(initPos[0], true);
 		
-		glm::vec3 cartDummy = sphToCart(glm::vec3(r + guiData.bodies[3]->realRadius, theta, phi));
+		ImGui::SliderFloat("theta", &initPos[1], 0, glm::pi<float>(), "%.2f rad");
+		ImGui::SameLine();
+		arrowToggle(initPos[1], false);
+		if (initPos[1] < 0) initPos[1] += glm::pi<float>();
+
+		ImGui::SliderFloat("phi", &initPos[2], 0, 2 * glm::pi<float>(), "%.2f rad");
+		ImGui::SameLine();
+		arrowToggle(initPos[2], false);
+		if (initPos[2] < 0) initPos[2] += 2 * glm::pi<float>();
+
+		ImGui::SliderFloat("Velocity", &initVel[0], 0, 12, "%.2f m/s");
+		ImGui::SameLine();
+		arrowToggle(initVel[0], false);
+		if (initVel[0] < 0) initVel[0] += 12;
+		
+		ImGui::SliderFloat("Pitch", &initVel[1], 0, glm::pi<float>(), "%.2f rad");
+		ImGui::SameLine();
+		arrowToggle(initVel[1], false);
+		if (initVel[1] < 0) initVel[1] += glm::pi<float>();
+
+		ImGui::SliderFloat("Yaw", &initVel[2], 0, 2 * glm::pi<float>(), "%.2f rad");
+		ImGui::SameLine();
+		arrowToggle(initVel[2], false);
+		if (initVel[2] < 0) initVel[2] += 2 * glm::pi<float>();
+
+		// init pv
+		glm::vec3 cartDummy = sphToCart(initPos + glm::vec3{guiData.bodies[3]->realRadius, 0, 0});
 		pv->Pos = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y};
-		cartDummy = sphToCart(glm::dvec3(vMag, vTheta, vPhi));
+
+		glm::vec3 relToPos = { 0, initPos[1] - glm::pi<float>() / 2, initPos[2] };
+		cartDummy = sphToCart(initVel + relToPos);
 		pv->Vel = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y };
+
+		// process pv
 		sat->ArtSatPlan(*pv, *(guiData.simTime), 3, guiData.bodies);
-		sat->ArtSatUpdState(guiData.bodies, *guiData.simTime);
-		sat->ArtSatRender(guiData.camera, *(guiData.bodies[0]));
+		sat->ArtSatUpdState(guiData.bodies, *guiData.simTime, *guiData.tW, -1);
 
 		// reset art sat parameters to default values in each, delete pvUnit as well
 		if (ImGui::Button("Save")) {
@@ -239,6 +348,10 @@ void GUI::guiLoopADS(GUIData guiData) {
 					counter++;
 				}
 				satNamesLen = counter;
+
+				// reset init values
+				initPos = { 300, glm::pi<float>() / 2, 0 };
+				initVel = { 7.8, glm::pi<float>() / 2, 3 * glm::pi<float>() / 2 };
 			}
 		}
 		ImGui::SameLine();
@@ -251,49 +364,8 @@ void GUI::guiLoopADS(GUIData guiData) {
 		}
 	}
 
-	/*
-	// drop down
-	const char* items[] = { "AAAA", "BBBB", "CCCC", "DDDD", "EEEE", "FFFF", "GGGG", "HHHH", "IIIIIII", "JJJJ", "KKKKKKK" };
-			static int item_current = 0;
-			ImGui::Combo("combo", &item_current, items, IM_ARRAYSIZE(items));
-
-
-	ImGui::SeparatorText("ABOUT THIS DEMO:"); // -- words ---------
-
-	// Arrow buttons with Repeater
-	//IMGUI_DEMO_MARKER("Widgets/Basic/Buttons (Repeating)");
-	static int counter = 0;
-	float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-	ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
-	if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { counter--; }
-	ImGui::SameLine(0.0f, spacing);
-	if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { counter++; }
-	ImGui::PopItemFlag();
-	ImGui::SameLine();
-	ImGui::Text("%d", counter);
-
-	ImGui::Button("Tooltip");
-	ImGui::SetItemTooltip("I am a tooltip"); // floating box when hover
-
-	//IMGUI_DEMO_MARKER("Widgets/Basic/Button"); // button click, print line beside
-	static int clicked = 0;
-	if (ImGui::Button("Button"))
-		clicked++;
-	if (clicked & 1)
-	{
-		ImGui::SameLine();
-		ImGui::Text("Thanks for clicking me!");
-	}
-
-	static int i0 = 123; // numerical input with -/+ buttons
-	ImGui::InputInt("input int", &i0);
-
-	static char str0[128] = "Hello, world!"; // word input, also use to display info
-	ImGui::InputText("input text", str0, IM_ARRAYSIZE(str0));
-	*/
-
+	
 	ImGui::End();
-
 }
 
 void GUI::guiLoopEnd(GUIData guiData) {
@@ -301,6 +373,9 @@ void GUI::guiLoopEnd(GUIData guiData) {
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	if (newArtSat) {
 		sat->ArtSatRender(guiData.camera, *(guiData.bodies[0]));
+	}
+	if (newMan) {
+		copySat->ArtSatRender(guiData.camera, *(guiData.bodies[0]));
 	}
 }
 
@@ -311,6 +386,19 @@ void GUI::guiDestroy() {
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
+}
+
+void arrowToggle(float& value, bool isInt) {
+	float inc = 0;
+	if (isInt)
+		inc = 1;
+	else
+		inc = 0.01;
+	ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
+	if (ImGui::ArrowButton(std::to_string(rand()).c_str(), ImGuiDir_Left)) { value -= inc; }
+	ImGui::SameLine();
+	if (ImGui::ArrowButton(std::to_string(rand()).c_str(), ImGuiDir_Right)) { value += inc; } // when tw value gets bigger, this moves to compensate, should fix pos
+	ImGui::PopItemFlag();
 }
 
 char* secToDay(double dt) {

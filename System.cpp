@@ -2,6 +2,7 @@
 #include <cstring>
 
 //double distanceFind(glm::vec3 state1, glm::vec3 state2);
+void stateVecToSim(char* vec, state& someState);
 
 System::System() {
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
@@ -32,6 +33,11 @@ System::System() {
 		}
 	}
 
+	// init art sats
+	// program to take artSats and name of ephemeris data, process and add mission + maneuver to persistent memory
+
+	initSat("Artemis 1", "horizons_results_raw.txt", artSats);
+
 	// time memory save
 	sysTime = *(time_block*) malloc(sizeof(time_block));
 	simTime = *(time_block*) malloc(sizeof(time_block));
@@ -41,7 +47,7 @@ System::System() {
 	updateBodyState(); // shaders stable here
 }
 
-Mesh System::initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot,  bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, int orbPeriod) {
+Mesh System::initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, int orbPeriod) {
 	// init texture
 	Texture tex[] = { Texture(texFilePath, "diffuse", 0, GL_RGB, GL_UNSIGNED_BYTE) };
 
@@ -72,21 +78,119 @@ Mesh System::initBody(const char* name, const char* texFilePath, float mass, flo
 	return body;
 }
 
-void System::ArtSatHandle(std::vector<Mesh*> bodies, Camera* camera, double* dt) {
-	// get info from GUI
+void System::initSat(const char* name, const char* eph, std::vector<ArtSat>& artSats) {
+	// hold maneuvers
+	char* mane[100];
 
+	// parse text file
+	std::fstream dataStream(eph, std::fstream::in); // can read and write
+	if (!dataStream) {
+		std::cout << "File failed to open / create\n";
+		dataStream.clear();
+		return;
+	}
+
+	bool close = false;
+	int maneIdx = 0;
+	while (!close) {
+		// get maneuver information
+		char* buff = new char[300];
+		dataStream.getline(buff, 300);
+
+		if (buff[0] == buff[1] && buff[1] == buff[2] && buff[2] == '*' || maneIdx > 19) { // *** terminates maneuver information
+			break;
+		}
+		mane[maneIdx++] = buff;
+	}
+
+	char buff[300];
+	state someState;
+	dataStream.getline(buff, 300);
+	stateVecToSim(buff, someState);
+
+	ArtSat* test = new ArtSat();
+	double testTime = someState.time;
+	test->ArtSatPlan({ someState.pos, someState.vel }, testTime, 3, bodies);
+	test->name = name;
+
+	// initialize at first line time, state
+	// add maneuvers when the time equals the next mane
+	// just modify velocity
+	// need little function for parsing the maneuver and persistent data to apply logic to
+
+	// need to know if mission is over, when, and if not what the current state is (cheat) and 
+	// update in a file with the ability to read and propogate from the last input location
+
+	// grab maneuvers, end state
+	char altBuff[300];
+	int maneIdx2 = 1;
+	while (1) {
+		strcpy(altBuff, buff);
+		dataStream.getline(buff, 300);
+
+		if (buff[0] == buff[1] && buff[1] == buff[2] && buff[2] == '*') { // *** terminates maneuver information
+			break;
+		}
+		/* maneuver importing below
+		char* altBuff2 = new char, * altBuffTime = new char;
+		strncpy(altBuff2, buff, sizeof(buff));
+		altBuff2 += 24;
+		strncpy(altBuffTime, altBuff2, sizeof(buff) - 24);
+		altBuffTime += 12;
+		altBuff2[12] = '\0';
+		altBuffTime[2] = '\0';
+
+		char* subS = strstr(mane[maneIdx2], altBuff2);
+		char* subsubS = subS + 12;
+		subsubS[2] = '\0';
+		if (subS != nullptr) { // if date of a maneuver
+
+			if (std::stoi(altBuffTime) - std::stoi(subsubS) < 6){// ****** assume ephermis data taken 6 hours apart
+				// if time right after a maneuver
+				// add maneuver (in buff) to satellite, 
+
+				maneIdx2++;
+			}
+			else if (std::stoi(altBuffTime) > 18) {
+				// if first thing tomorrow is soonest after maneuver
+
+			}
+
+		}
+
+		delete altBuff2;
+		delete altBuffTime;
+		*/
+	}
+	char* token = strtok(altBuff, ";");
+	double endTime = atof(token);
+	endTime = (endTime - 2440587.5) * 86400.0; // to UNIX
+	// add to artSat, check time at update
+
+	dataStream.close();
+
+
+	test->lastEphTime = endTime;
+	artSats.push_back(*test);
+
+
+	// free all mane's
+	while (maneIdx != 0) {
+		delete mane[--maneIdx];
+	}
+
+}
+
+void System::ArtSatHandle(std::vector<Mesh*> bodies, Camera* camera, double dt, int tW) {
 
 	for (int i = 0; i < artSats.size(); i++) {
-		artSats[i].ArtSatUpdState(bodies, *dt);
+		artSats[i].ArtSatUpdState(bodies, dt, tW,  0);
 		artSats[i].ArtSatRender(camera, *(bodies[0]));
 		if (i < satPos.size())
 			satPos[i] = &artSats[i].simPos;
 		else
 			satPos.push_back(&artSats[i].simPos);
 	}
-
-
-	// need handler for maneuver / passive render
 }
 
 void System::updateBodyState() { // System holds it's own positions, gets updated from Mesh --- System triggers Move and calls for velocity from body
@@ -197,7 +301,9 @@ void System::time_block_ms_add(time_block &someTime, int sum, bool sign) {
 	if (sum > 1000) {
 		// throw exception for non three digit sum
 	}
-	someTime.ms += sum; // addition isn't being saved
+	int corr = 0;
+	sign ? corr = 1: corr = -1;
+	someTime.ms += sum;
 	std::string num = std::to_string(someTime.ms);
 	// handles overflowing ms
 	if (num.length() > 3) {
@@ -206,7 +312,7 @@ void System::time_block_ms_add(time_block &someTime, int sum, bool sign) {
 
 		// adds reverse remainder to the total sum
 		auto timeUnitT = std::chrono::system_clock::to_time_t((someTime.timeUnit));
-		sign == true ? timeUnitT += overAmt/1000 : timeUnitT -= overAmt/1000;
+		timeUnitT += corr * overAmt / 1000;
 		someTime.timeUnit = std::chrono::system_clock::from_time_t((timeUnitT));
 		ctime_s(someTime.timeString, sizeof(someTime.timeString), &timeUnitT);
 		someTime.time_in_sec = std::chrono::time_point_cast<std::chrono::seconds>
@@ -240,7 +346,7 @@ void System::WarpClockSet(const int currWarp) {
 		}
 		// update with time warp multiplier
 		auto pastTimeUnit = std::chrono::system_clock::to_time_t((simTime.timeUnit));
-		pastTimeUnit += diffWarp;
+		pastTimeUnit += static_cast<time_t>(diffWarp);
 		simTime.timeUnit = std::chrono::system_clock::from_time_t(pastTimeUnit);
 
 		// update sim time and reset sys time
@@ -253,10 +359,54 @@ void System::WarpClockSet(const int currWarp) {
 	}
 }
 
+void System::ArgClockSet(double dt) {
+	time_t sec = static_cast<time_t>(dt);
+	simTime.timeUnit = std::chrono::system_clock::from_time_t(sec);
+
+	ctime_s(simTime.timeString, sizeof(simTime.timeString), &sec);
+	simTime.time_in_sec = std::chrono::time_point_cast<std::chrono::seconds>
+		(simTime.timeUnit).time_since_epoch().count();
+
+}
+
+void stateVecToSim(char* vec, state& someState) {
+	// read line of ephemeris data and transform into state info in sim frame
+	char* endPtr;
+
+	char* token = strtok(vec, ",");
+	double JDTDB = atof(token);
+	someState.time = (JDTDB - 2440587.5) * 86400.0; // to UNIX
+	
+	token = strtok(NULL, ",");
+	char dummy[30];
+	strncpy(dummy, token + 5, 18);
+	someState.date = dummy + '\0'; // can compare directly to maneuver data
+
+	token = strtok(NULL, ",");
+	someState.pos.x = strtod(token, &endPtr);
+
+	token = strtok(NULL, ",");
+	someState.pos.y = strtod(token, &endPtr);
+
+	token = strtok(NULL, ",");
+	someState.pos.z = strtod(token, &endPtr);
+
+	token = strtok(NULL, ",");
+	someState.vel.x = strtod(token, &endPtr);
+
+	token = strtok(NULL, ",");
+	someState.vel.y = strtod(token, &endPtr);
+
+	token = strtok(NULL, ","); // atof doesn't seem to work for when E is to a negative integer, maybe the double conversion
+	someState.vel.z = strtod(token, &endPtr);
+}
 
 
 
 void System::deleteSystem() {
+
+	// free all art sats
+
 
 }
 

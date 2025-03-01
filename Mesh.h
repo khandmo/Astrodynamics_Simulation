@@ -137,7 +137,7 @@ public:
 	// return functions to call for attributes below
 
 	// returns NASA (km) position/velocity wrt Solar System barycenter at a given time
-	pvUnit getPV(double time, bool stateChanged);
+	pvUnit getPV(double time, bool stateChanged, bool rotated);
 	
 };
 

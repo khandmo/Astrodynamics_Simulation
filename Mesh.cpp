@@ -439,12 +439,20 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	Mesh::lastItTime = UTCtime;
 }
 
-pvUnit Mesh::getPV(double time, bool stateChanged) { // *** add boolean for state change version instead
+pvUnit Mesh::getPV(double time, bool stateChanged, bool rotated) { // *** add boolean for state change version instead
 	SpiceDouble state[6];
 	SpiceDouble lt;
 	double et = time - UTC2J2000;
 	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
 	if (stateChanged) stateChange(state);
+	if (!stateChanged && rotated) {
+		glm::vec3 vec = glm::vec3(state[0], state[1], state[2]);
+		vec = glm::rotateX(vec, glm::radians(-23.4f));
+		state[0] = vec[0]; state[1] = vec[1]; state[2] = vec[2];
+		vec = glm::vec3(state[3], state[4], state[5]);
+		vec = glm::rotateX(vec, glm::radians(-23.4f));
+		state[3] = vec[0]; state[4] = vec[1]; state[5] = vec[2];
+	}
 	return pvUnit{ glm::vec3{state[0], state[1], state[2]}, glm::vec3{state[3], state[4], state[5]} };
 }
 
@@ -461,27 +469,27 @@ void Mesh::updateModel(Mesh& source) {
 
 
 double distanceFind(std::vector<double> pt1, std::vector<double> pt2) {
-	double x2 = abs(pt1[0] - pt2[0]);
-	double y2 = abs(pt1[1] - pt2[1]);
-	double z2 = abs(pt1[2] - pt2[2]);
+	double x2 = pt1[0] - pt2[0];
+	double y2 = pt1[1] - pt2[1];
+	double z2 = pt1[2] - pt2[2];
 	x2 *= x2; x2 += (y2 * y2) + (z2 * z2);
 	return sqrt(x2);
 }
 
 double distanceFind(glm::vec3 state1, SpiceDouble * state2) {
-	double x = abs(state1[0] - state2[0]);
-	double y = abs(state1[1] - state2[1]);
+	double x = state1[0] - state2[0];
+	double y = state1[1] - state2[1];
 	x *= x; x += y * y;
-	y = abs(state1[2] - state2[2]);
+	y = state1[2] - state2[2];
 	x += y * y;
 	return sqrt(x);
 }
 
 double distanceFind(glm::vec3 state1, glm::vec3 state2) {
-	double x = abs(state1[0] - state2[0]);
-	double y = abs(state1[1] - state2[1]);
+	double x = state1[0] - state2[0];
+	double y = state1[1] - state2[1];
 	x *= x; x += y * y;
-	y = abs(state1[2] - state2[2]);
+	y = state1[2] - state2[2];
 	x += y * y;
 	return sqrt(x);
 }

@@ -73,8 +73,6 @@ int main() {
 
 	std::cout << "beginning sim" << std::endl; 
 	while (!glfwWindowShouldClose(window)) {
-		// constantly checks current state of window 
-		glfwPollEvents();
 		// process GUI
 		gui.guiLoopStart(guiData);
 
@@ -102,6 +100,10 @@ int main() {
 
 		// Process time 
 		Sys.WarpClockSet(dtRange[dt]);
+		if (gui.goToManTime != -1) {
+			Sys.ArgClockSet(gui.goToManTime);
+			gui.goToManTime = -1;
+		}
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
@@ -109,7 +111,7 @@ int main() {
 		
 		//Handle changes
 		Sys.orbLineHandle((camera).Position);
-		Sys.ArtSatHandle(Sys.bodies, &camera, &Sys.simTime.time_in_sec);
+		Sys.ArtSatHandle(Sys.bodies, &camera, Sys.simTime.time_in_sec, dt);
 
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
@@ -121,9 +123,12 @@ int main() {
 		// update gui info
 		guiData.time = Sys.simTime.timeString;
 		guiData.tWRange = dtRange[dt];
+
 		
 		//update image each frame
 		glfwSwapBuffers(window);
+		// constantly checks current state of window 
+		glfwPollEvents();
 
 	}
 

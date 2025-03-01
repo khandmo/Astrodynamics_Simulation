@@ -1,7 +1,12 @@
 #ifndef OBJECT_H
 #define OBJECT_H
 
-#include "Mesh.h"
+#include <vector>
+#include "VBO.h"
+#include <GLFW/glfw3.h>
+#include <glm/gtc/type_ptr.hpp>
+
+
 
 /*
 Object Mesh Summon creates the vertex data and element index data for a given shaped object using algorithms from simple inputs.

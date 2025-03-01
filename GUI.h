@@ -37,6 +37,7 @@ public:
 	int satNamesLen;
 
 	int focusType = 0; // locally designates difference between planet and sat focus
+	int satFocusIndex = 0;
 
 	ArtSat* sat;
 	pvUnit* pv;
@@ -44,14 +45,24 @@ public:
 	bool newArtSat = false;
 	bool newMan = false;
 	// new artificial satellite parameters
-	int r = 300; float vMag = 10.85; // km, km/s
-	float theta = glm::pi<float>() / 2; // from pole (equatorial orbit)
-	float phi = 0;
-	float vTheta = glm::pi<float>() / 2;
-	float vPhi = (3 * glm::pi<float>()) / 2;
+	glm::vec3 initPos = { 415, glm::pi<float>() / 2, 0 };
+	glm::vec3 initVel = { 7.67, glm::pi<float>() / 2, 3 * glm::pi<float>() / 2 };
+
+	ArtSat* copySat = nullptr;
+
+	
+	bool showMan = false;
+	const char** manList = nullptr;
+	int manListLen = 0;
+	int manListCurr = 0;
+
+	glm::vec3 manData = { 0, 0, 0 };
+	glm::vec3 oldManData = manData;
 	
 	float newManDt = 0;
+	float oldManDt = 0;
 	float manDt = 0;
+	double goToManTime = -1;
 
 	GUI(GLFWwindow* window, GUIData guiData);
 

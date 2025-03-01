@@ -1,40 +1,46 @@
 #include "ArtSat.h"
 
 pvUnit RK4(pvUnit pv, double M, double dt);
-pvUnit leapfrog(pvUnit pv, double M, double dt);
+pvUnit leapfrog(pvUnit pv, std::vector<Mesh*> bodies, int soiIdx, double dt, double timeStep);
 glm::dvec3 onePN(pvUnit pv, double M);
+glm::dvec3 accel_comp(pvUnit pv, std::vector<Mesh*> bodies, int soiIdx, double dt);
 double vecMag(glm::dvec3 vec);
 void updatePV(pvUnit* pv, std::vector<Mesh*> bodies, int soiID, double dt, float timeStep, double &E0);
 
 std::vector <double> createGaussianKernel(int size, int stdDev);
 int gSmooth(std::vector<double> *kernel, std::vector<glm::dvec3> *noisy, std::vector<glm::dvec3> *smooth);
 float getAngle(glm::vec3 v1, glm::vec3 v2);
+void simCartToSph(glm::dvec3& cart);
 
 double totalEnergy(pvUnit pv, double M, double* KE, double* PE);
 
 ArtSat::ArtSat() {
-	// init list of all art sats and their maneuvers
-	//for (int i = 0; i < LINE_BUFF_SIZE_AS - 1; i++)
-	//	lineBuff[i] = *(new vertex_t{});
-	// could begin with circular orbit at some default height based on radius of soiID
 
 	// init shader device, will need to get uniform for camera info to render
 	ArtSat::pathDevice = geom_shdr_lines_init_device();
 	// init box 
 	sat = new Object;
 	sat->Box(.0005, 0, 1, 0.2);
+
+	apoapsis = new poi;
+	periapsis = new poi;
+	stat = new stats;
+
+	state = new pvUnit;
+	stateButChanged = new pvUnit;
+
 	
 	stateTime = 0;
 
-	VAO.Bind();
+	VAOu.Bind();
 	VBO VBO(sat->vertices);
 	EBO EBO(sat->indices);
 
-	VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
-	VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
-	VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
-	VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
-	VAO.Unbind();
+	VAOu.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
+	VAOu.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+	VAOu.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
+	VAOu.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
+	VAOu.Unbind();
 	VBO.Unbind();
 	EBO.Unbind();
 }
@@ -55,7 +61,6 @@ int ArtSat::ArtSatPlan(pvUnit pv, double dt, int soiIndex, std::vector <Mesh*> b
 
 		pvUnit* pvSC = new pvUnit(pv);
 		stateChange(&(pvSC->Pos), &(pvSC->Vel));
-		lineBuff[0] = vertex_t{ {pvSC->Pos, lineWidth}, lineColor };
 
 
 		// add pos as poi to carry
@@ -65,85 +70,160 @@ int ArtSat::ArtSatPlan(pvUnit pv, double dt, int soiIndex, std::vector <Mesh*> b
 
 		stat->initTime = dt;
 
+		maneuvers.push_back({ pv, pv, dt, "launch", "orbital insertion"});
+
 		// chart trajectory
 		chartTraj(pv, bodies, dt);
+		chartApproach(bodies, 4);
 	}
 	return 1;
 }
 
 
 
-
-
-
-void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double dt) {
+// should perform this on a copy of the probe first and when save is triggered splice into System save
+void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double dt, const char name[30], const char desc[30]) {
 	// modify velocity (instantaneously or over some dt burn time)
-	pvUnit newPV = *state;
-	newPV.Vel += deltaV;
-	maneuvers->push_back({ newPV, dt });
-	chartTraj(newPV, bodies, dt);
+
+	std::chrono::time_point<std::chrono::system_clock> t1, t2, t3, t4, t5;
+	t1 = std::chrono::system_clock::now();
+	// probe forward to find sat pv @ dt
+	int timeTill = std::max(dt - stateTime, (double)1);
+	int acc = 0; double dummy = 0;
+	while (acc != timeTill) { // would love to set up a thread to do this in the back and provide a 30 update in the meantime
+		updatePV(state, bodies, soiIdx, dt + ++acc, 1, dummy);
+	}
+	t2 = std::chrono::system_clock::now();
+	pvUnit origState = *state;
+
+	simCartToSph(state->Vel);
+	state->Vel += deltaV; // add spherically
+	state->Vel = sphToCart(state->Vel);
+	state->Vel = { -state->Vel.x, state->Vel.z, state->Vel.y };
+
+	maneuvers.push_back({origState, *state, dt, name, desc });
+	t3 = std::chrono::system_clock::now();
+	chartTraj(*state, bodies, dt);
+	t4 = std::chrono::system_clock::now();
+	chartApproach(bodies, 4);
+	t5 = std::chrono::system_clock::now();
+
+	std::chrono::duration<double> update, traj, appr;
+	update = t2 - t1;
+	traj = t4 - t3;
+	appr = t5 - t4;
+
+	int hook = 5;
 }
 
-void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt) {
+void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, double mod) {
 
-	// handle state update
-	int counter = dt - stateTime;
-	double lastTime = stateTime, dummy = 0;
-	while (counter > 0) {
-		updatePV(state, bodies, soiIdx, lastTime, 1.0f, dummy);
-		counter--; lastTime++;
+
+	if (dt < maneuvers[0].time || lastEphTime != -1 && dt - lastEphTime > 60 * 60 * 24) { // mod is -1 at art sat creation
+		inTime = false;
+		return;
 	}
-	*stateButChanged = *state;
-	stateChange(&(stateButChanged->Pos), &(stateButChanged->Vel));
-	stateTime = dt;
+	else {
+		inTime = true;
+	}
 
-	ArtSat::simPos = (glm::vec3)stateButChanged->Pos + *(bodies[soiIdx]->Pos);
+	// check if maneuver scheduled and execute
+	if (mod != -1) {
+		for (int i = 0; i < maneuvers.size(); i++) {
+			if (maneuvers[i].time == dt) {
 
-	// handle stats update
-	stat->timeToApo = abs(apoapsis->time - (dt - stat->initTime));
-	stat->timeToPeri = abs(periapsis->time - (dt - stat->initTime));
-	stat->MET = dt - stat->initTime; // need start time held too
-	stat->distToSoi = vecMag(state->Pos) - bodies[soiIdx]->realRadius;
+				if (tW < 15) {
+					*state = maneuvers[i].origState;
+				}
+				else {
+					*state = maneuvers[i].newState;
+				}
 
-	// handle model
-	glm::mat4 objModel = glm::mat4(1.0f);
-	Model = glm::translate(objModel, simPos);
+				chartTraj(*state, bodies, dt);
+				chartApproach(bodies, 4);
+				return;
+			}
+		}
+	}
 
-	// relativize path to soi position
-	for (int i = 0; i < LINE_BUFF_SIZE_AS; i++) {
-		relLB[i] = lineBuff[i];
-		relLB[i].pos += *(bodies[soiIdx]->Pos);
+
+	if (inTime) {
+
+		// should refresh orbits at every turning point
+		if (mk1 == nullptr) {
+			chartApproach(bodies, 4);
+		}
+		else {
+			mk1->simPos = mk1->fixedPos + *bodies[soiIdx]->Pos;
+			mk2->simPos = mk2->fixedPos + *bodies[soiIdx]->Pos;
+		}
+
+		// handle state update
+		int counter = dt - stateTime;
+		double lastTime = stateTime, dummy = 0;
+		while (counter > 0) {
+			updatePV(state, bodies, soiIdx, lastTime++, 1.0f, dummy);
+			counter--;
+		}
+		*stateButChanged = *state;
+		stateChange(&(stateButChanged->Pos), &(stateButChanged->Vel));
+		stateTime = dt;
+
+		ArtSat::simPos = (glm::vec3)stateButChanged->Pos + *(bodies[soiIdx]->Pos);
+
+		// handle stats update
+		stat->timeToApo = abs(apoapsis->time - (dt - stat->initTime));
+		stat->timeToPeri = abs(periapsis->time - (dt - stat->initTime));
+		stat->MET = dt - stat->initTime; // need start time held too
+		stat->distToSoi = vecMag(state->Pos) - bodies[soiIdx]->realRadius;
+
+		// handle model
+		glm::mat4 objModel = glm::mat4(1.0f);
+		Model = glm::translate(objModel, simPos);
+
+		// relativize path to soi position
+		for (int i = 0; i < LINE_BUFF_SIZE_AS; i++) {
+			relLB[i] = lineBuff[i];
+			relLB[i].pos += *(bodies[soiIdx]->Pos);
+			if (mod == 1) {
+				relLB[i].col = { 0.0f, 0.3f, 1.0f, 0.43f };
+			}
+		}
 	}
 }
 
 
 void ArtSat::ArtSatRender(Camera* camera, Mesh lightSource) {
-	// shader
-	setShader(lightSource);
-	// draw box
-	sp.Activate();
-	VAO.Bind();
+	if (inTime) {
+		// shader
+		setShader(lightSource);
+		// draw box
+		sp.Activate();
+		VAOu.Bind();
 
-	camera->Matrix(sp, "camMatrix");
-	glDrawElements(GL_TRIANGLES, sat->indices.size(), GL_UNSIGNED_INT, 0);
-	
-	// render lineBuff
-	uniform_data_t uni;
-	glm::mat4 mvp = camera->cameraMatrix * glm::mat4(1.0); // mult 4x4 glm - non zero, should check shader
-	uni.mvp = &mvp[0][0];
-	glm::vec4 vpt = glm::vec4(0, 0, (float)camera->width, (float)camera->height);
-	uni.viewport = &vpt.z;
-	glm::vec2 aa_radii = glm::vec2(2.0f, 2.0f);
-	uni.aa_radius = &aa_radii.x;
+		camera->Matrix(sp, "camMatrix");
+		glDrawElements(GL_TRIANGLES, sat->indices.size(), GL_UNSIGNED_INT, 0);
 
-	geom_shdr_lines_update(&pathDevice, &relLB,
-		LINE_BUFF_SIZE_AS, sizeof(vertex_t), &uni);
+		// render lineBuff
+		uniform_data_t uni;
+		glm::mat4 mvp = camera->cameraMatrix * glm::mat4(1.0); // mult 4x4 glm - non zero, should check shader
+		uni.mvp = &mvp[0][0];
+		glm::vec4 vpt = glm::vec4(0, 0, (float)camera->width, (float)camera->height);
+		uni.viewport = &vpt.z;
+		glm::vec2 aa_radii = glm::vec2(2.0f, 2.0f);
+		uni.aa_radius = &aa_radii.x;
 
-	int buffSize = LINE_BUFF_SIZE_AS;
-	if (lB_size_actual != -1)
-		buffSize = lB_size_actual;
-	geom_shdr_lines_render(&pathDevice, buffSize);
+		geom_shdr_lines_update(&pathDevice, &relLB,
+			LINE_BUFF_SIZE_AS, sizeof(vertex_t), &uni);
 
+		int buffSize = LINE_BUFF_SIZE_AS;
+		if (lB_size_actual != -1)
+			buffSize = lB_size_actual;
+		geom_shdr_lines_render(&pathDevice, buffSize);
+
+		mk1->MarkerRender(camera);
+		mk2->MarkerRender(camera);
+	}
 }
 
 
@@ -157,7 +237,8 @@ ArtSat::~ArtSat() {
 	delete prevPV;
 	delete sat;
 	delete stat;
-	delete maneuvers;
+	delete mk1;
+	delete mk2;
 }
 
 void ArtSat::setShader(Mesh& lightSource) {
@@ -184,6 +265,9 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 	pvUnit* pvCurr = new pvUnit(pv);
 	pvUnit* pvSC = new pvUnit(pv);
 
+	stateChange(&(pvSC->Pos), &(pvSC->Vel));
+	lineBuff[0] = vertex_t{ {pvSC->Pos, lineWidth}, lineColor };
+
 	std::vector <glm::dvec3> dynLBN, dynLBS;
 	std::vector <int> soi_list;
 
@@ -202,6 +286,12 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 	// init kernel
 	std::vector<double> gKernel = createGaussianKernel(101, 15);
 
+
+	std::chrono::time_point<std::chrono::system_clock> t1, t2, t3, t4, t5;
+	
+	
+
+	t1 = std::chrono::system_clock::now();
 	// scan step
 	while (!close) {
 		iterations++;
@@ -217,6 +307,7 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 				dynLBN[i] = dynLBN[dummier];
 				dynLBN[dummier] = dummy;
 			}
+			t2 = std::chrono::system_clock::now();
 		}
 
 		// a & b check for turning points
@@ -232,8 +323,9 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 		// update time step based on velocity (could try acceleration)
 		lastVelocity = velocity;
 		velocity = vecMag(pvCurr->Vel);
-		factor = exp(-((velocity - 9) / 2)); // could try lV vs. V - make factor large when deltaV is large and vice versa
-
+		factor = exp(-((velocity - 9) * 3 / 5)); // could try lV vs. V - make factor large when deltaV is large and vice versa
+		//factor = exp(-(abs(velocity - lastVelocity) * 2)); // fxn doesnt do the trick - need low diff to be a larger number (over 1), high diff to be closer
+		// NEED a threshold like 9 to compare - would need the average difference over the orbit to be universal
 
 		*pvSC = *pvCurr;
 		stateChange(&(pvSC->Pos), &(pvSC->Vel));
@@ -272,7 +364,7 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 				}
 			}
 
-			if (c < bodies[soiIdx]->radius || (tp == 4 && toPV > lastToPV) || iterations > 15000) // arbitrary constant
+			if (c < bodies[soiIdx]->radius || (tp == 4 && toPV > lastToPV) || iterations > 5000) // arbitrary constant
 				close = true;
 		}
 
@@ -286,6 +378,8 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 	*periapsis = peri;
 
 
+
+	t3 = std::chrono::system_clock::now();
 	// fill step lineBuff with dynLineBuff
 	float sum = dynLBS.size() / (float)((LINE_BUFF_SIZE_AS - 2) / 2);
 	int j = 1; float overflow = 0; int overflowAmt = 0;
@@ -317,6 +411,13 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 			j += 2;
 		}
 	}
+	t4 = std::chrono::system_clock::now();
+	std::chrono::duration<double> aaprelim, aascan, aafill;
+	aaprelim = t2 - t1;
+	aascan = t3 - t1;
+	aafill = t4 - t3;
+
+
 
 	lineBuff[LINE_BUFF_SIZE_AS - 1] = lineBuff[0];
 
@@ -324,9 +425,67 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 	delete pvSC;
 }
 
+void ArtSat::chartApproach(std::vector<Mesh*> bodies, int targetID) {
+	// could add all this to the probe step in traj, would be more efficient instead of running through update again
+
+	// update state through orbital period until distance goes down and comes back up or lowest distance
+	double dist = INT_MAX, dummy = 0;
+	pvUnit pv = *state;
+	int acc = 1;
+	float timeStep = 60 * 5;
+
+	glm::dvec3 caPos = pv.Pos;
+	double caTime = 0;
+	double roughEstTime = 0;
+
+	while (acc < stat->orbitalPeriod) {
+		// these udpatePV loops would greatly benefit from a reliable velocity based multiplticative factor
+		updatePV(&pv, bodies, soiIdx, stateTime + acc, timeStep, dummy);
+
+		glm::vec3 bodyPos = bodies[targetID]->getPV(stateTime + acc, false, true).Pos;
+		bodyPos = -bodyPos;
+
+		double newDist = distanceFind(pv.Pos, bodyPos);
+		if (newDist < dist) {
+			dist = newDist;
+			roughEstTime = stateTime + acc;
+		}
+		acc += timeStep;
+	}
+
+	pv = *state;
+	acc = 0;
+	timeStep = 15;
+	dist = INT_MAX;
+
+	// would benefit from valid pv points along trajectory pre calculated?
+	while (acc < (roughEstTime + (60 * 5) - stateTime)) {
+		updatePV(&pv, bodies, soiIdx, stateTime + acc, timeStep, dummy);
+		if (acc > (roughEstTime - (60 * 5) - stateTime)) {
+
+			glm::vec3 bodyPos = bodies[targetID]->getPV(stateTime + acc, false, true).Pos;
+			bodyPos = -bodyPos;
+
+			double newDist = distanceFind(pv.Pos, bodyPos);
+			if (newDist < dist) {
+				dist = newDist;
+				caPos = pv.Pos;
+				caTime = stateTime + acc;
+			}
+		}
+		acc += timeStep;
+	}
+
+	stateChange(&(caPos), &(pv.Vel));
+
+	mk1 = new Marker(1, 1, (glm::vec3)caPos, *(bodies[soiIdx]->Pos));
+	mk2 = new Marker(1, 1, (glm::vec3)(bodies[targetID]->getPV(caTime, true, false).Pos), *(bodies[soiIdx]->Pos)); // scheme changes for planet targets
+	closeApproachDist = dist;
+}
+
 void ArtSat::refreshTraj(std::vector<Mesh*> bodies, double dt) {
-	// *************************** RESETS MET
 	chartTraj(*state, bodies, dt);
+	chartApproach(bodies, 4);
 }
 
 
@@ -350,6 +509,34 @@ std::vector <double> createGaussianKernel(int size, int stdDev) {
 
 	for (auto& pt : res) { // normalize
 		pt = pt / sum;
+	}
+	return res;
+}
+
+glm::dvec3 accel_comp(pvUnit pv, std::vector<Mesh*> bodies, int soiIdx, double dt) {
+	glm::dvec3 res = { 0,0,0 };
+	double vecRes = 0;
+
+	pvUnit soi = bodies[soiIdx]->getPV(dt, false, true);
+	if (bodies[soiIdx]->isMoon) {
+		soi = bodies[soiIdx]->gravSource->getPV(dt, false, true) + bodies[soiIdx]->getPV(dt, false, true);
+	}
+	pvUnit pvToSun = pv + soi;
+
+	std::vector<double> str;
+	for (int i = 0; i < bodies.size(); i++) {
+		pvUnit pvToBody = pvToSun - bodies[i]->getPV(dt, false, true); // need mod for moons
+		if (bodies[i]->isMoon) {
+			pvToBody = pvToSun - (bodies[i]->gravSource->getPV(dt, false, true) + bodies[i]->getPV(dt, false, true));
+		}
+		glm::dvec3 acc = onePN(pvToBody, bodies[i]->mass);
+		str.push_back(vecMag(acc));
+		vecRes += vecMag(acc);
+		res += acc;
+	}
+
+	for (auto& val : str) { // gives percentage of effort for each body for soi detection
+		val /= vecRes;
 	}
 	return res;
 }
@@ -379,12 +566,17 @@ pvUnit RK4(pvUnit pv, double M, double dt) {
 	return pvUnit{ (dt / 6) * (k1 + (k2 * 2.0) + (2.0 * k3) + k4) , (dt / 6) * (l1 + (l2 * 2.0) + (2.0 * l3) + l4) };
 }
 
-pvUnit leapfrog(pvUnit pv, double M, double dt) {
+pvUnit leapfrog(pvUnit pv, std::vector<Mesh*> bodies, int soiIdx, double dt, double timeStep) {
 	// second order leapfrog algorithm (velocity-verlet)
 	pvUnit dummyPV = pv;
-	glm::dvec3 halfVel = pv.Vel + (onePN(pv, M) * (dt / 2));
-	dummyPV.Pos = pv.Pos + (halfVel * dt);
-	dummyPV.Vel = halfVel + (onePN({dummyPV.Pos, halfVel}, M) * (dt / 2));
+
+	// run oneP PN and sum for each body (pv relative)
+
+	glm::dvec3 halfVel = pv.Vel + (accel_comp(pv, bodies, soiIdx, dt) * (timeStep / 2));
+
+	dummyPV.Pos = pv.Pos + (halfVel * timeStep);
+	dummyPV.Vel = halfVel + (accel_comp({ dummyPV.Pos, halfVel }, bodies, soiIdx, dt) * (timeStep / 2));
+
 	return dummyPV - pv;
 }
 
@@ -434,49 +626,11 @@ double totalEnergy(pvUnit pv, double M, double *KE, double *PE) {
 
 // update pv with 1PN approximation at specific time dt (UTC) pv units should be in km, s (NOT state changed)
 void updatePV(pvUnit* pv, std::vector<Mesh*> bodies, int soiIndex, double dt, float timeStep, double &E0) {
-	pvUnit* pvChange = new pvUnit{ glm::vec3{0,0,0}, glm::vec3{0,0,0} };
-	pvUnit* pvToSun = new pvUnit(*pv); // pv according to solar system bary
-	pvUnit pvSoi = bodies[soiIndex]->getPV(dt, false);
-	float G = 6.6743 * glm::pow(10, -11); // N * m^2 * kg^-2
-	float mainPot = (G * bodies[soiIndex]->mass) / pow(vecMag(pv->Pos) * 1000, 2);
-	if (bodies[soiIndex]->baryID != 10) {
-		*pvToSun = *pvToSun + pvSoi;
-	}
 
 
-	int j = 3;
-	//for (int j = 3; j < 5; j++) {
-		// needs fxn p&v from pov of each body, need function
+	pvUnit change = leapfrog(*pv, bodies, soiIndex, dt, (double)timeStep);
 
-		double r = vecMag((*pvToSun - bodies[j]->getPV(dt, false)).Pos);
-		if (bodies[j]->isMoon) {
-			
-			r = vecMag(bodies[j]->getPV(dt, false).Pos - pv->Pos);
-		}
-
-		pvUnit change = leapfrog((*pvToSun - bodies[j]->getPV(dt, false)), bodies[j]->mass, timeStep);
-		float altPot = (G * bodies[j]->mass) / pow(r * 1000, 2);
-		float gravMod = altPot / mainPot;
-		change = change * gravMod;
-		
-		*pvChange = *pvChange + change; 
-
-		// soi change indicator
-		if (altPot == mainPot) {
-			E0 = (int)0;
-		}
-		else if (altPot > mainPot) {
-			E0 = (int)1;
-		}
-	//}
-
-
-	*pvToSun = *pvToSun + *pvChange; 
-	*pv = *pvToSun - pvSoi; // return to local pv
-	
-
-	delete pvChange;
-	delete pvToSun;
+	*pv = *pv + change; // return to local pv
 }
 
 int gSmooth(std::vector<double>* kernel, std::vector<glm::dvec3>* noisy, std::vector<glm::dvec3>* smooth) {
@@ -492,6 +646,18 @@ int gSmooth(std::vector<double>* kernel, std::vector<glm::dvec3>* noisy, std::ve
 	}
 	smooth->push_back(dummy);
 	return 0; 
+}
+
+void simCartToSph(glm::dvec3& cart) {
+	// swap sim values
+	double dummy = cart[0];
+	cart[0] =  sqrt(pow(cart[0], 2) + pow(cart[1], 2) + pow(cart[2], 2));
+	cart[2] = acos(cart[2] / cart[0]);
+	cart[1] = (cart[1] / abs(cart[1])) * acos(dummy / sqrt(pow(dummy, 2) + pow(cart[1], 2)));
+	cart[1] += 3 * glm::pi<float>() / 2;
+	dummy = cart[1];
+	cart[1] = cart[2];
+	cart[2] = dummy;
 }
 
 
