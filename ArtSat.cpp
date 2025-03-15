@@ -8,7 +8,7 @@ double vecMag(glm::dvec3 vec);
 void updatePV(pvUnit* pv, std::vector<Mesh*> bodies, int soiID, double dt, float timeStep, double &E0);
 
 std::vector <double> createGaussianKernel(int size, int stdDev);
-int gSmooth(std::vector<double> *kernel, std::vector<glm::dvec3> *noisy, std::vector<glm::dvec3> *smooth);
+int gSmooth(std::vector<double>* kernel, std::vector<pvUnit>* noisy, std::vector<pvUnit>* smooth);
 float getAngle(glm::vec3 v1, glm::vec3 v2);
 void simCartToSph(glm::dvec3& cart);
 
@@ -18,9 +18,6 @@ ArtSat::ArtSat() {
 
 	// init shader device, will need to get uniform for camera info to render
 	ArtSat::pathDevice = geom_shdr_lines_init_device();
-	// init box 
-	sat = new Object;
-	sat->Box(.0005, 0, 1, 0.2);
 
 	apoapsis = new poi;
 	periapsis = new poi;
@@ -31,18 +28,6 @@ ArtSat::ArtSat() {
 
 	
 	stateTime = 0;
-
-	VAOu.Bind();
-	VBO VBO(sat->vertices);
-	EBO EBO(sat->indices);
-
-	VAOu.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
-	VAOu.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
-	VAOu.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
-	VAOu.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
-	VAOu.Unbind();
-	VBO.Unbind();
-	EBO.Unbind();
 }
 
 // do not pass soiID, needs index of soi in bodies
@@ -70,30 +55,40 @@ int ArtSat::ArtSatPlan(pvUnit pv, double dt, int soiIndex, std::vector <Mesh*> b
 
 		stat->initTime = dt;
 
+		char* saveName = new char;
+		strcpy(saveName, "launch\0");
 		maneuvers.push_back({ pv, pv, dt, "launch", "orbital insertion"});
 
 		// chart trajectory
+		// char traj in thread
 		chartTraj(pv, bodies, dt);
 		chartApproach(bodies, 4);
 	}
 	return 1;
 }
 
-
-
 // should perform this on a copy of the probe first and when save is triggered splice into System save
-void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double dt, const char name[30], const char desc[30]) {
-	// modify velocity (instantaneously or over some dt burn time)
-
-	std::chrono::time_point<std::chrono::system_clock> t1, t2, t3, t4, t5;
-	t1 = std::chrono::system_clock::now();
-	// probe forward to find sat pv @ dt
-	int timeTill = std::max(dt - stateTime, (double)1);
-	int acc = 0; double dummy = 0;
-	while (acc != timeTill) { // would love to set up a thread to do this in the back and provide a 30 update in the meantime
-		updatePV(state, bodies, soiIdx, dt + ++acc, 1, dummy);
+void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, std::atomic<bool> &stop, double dt, const char name[30], const char desc[30]) {
+	threadStop = &stop;
+	// might need to check for past-orbit nodes
+	int i = 0;
+	while (1) { // is this bad code?
+		if (lBTime[i] > dt) {
+			i--;
+			break;
+		}
+		i++;
 	}
-	t2 = std::chrono::system_clock::now();
+
+	int timeTill = std::max(dt - lBTime[i], (double)0);
+	*state = lineBuff[2 * i];
+	invStateChange(&state->Pos, &state->Vel);
+	stateTime = lBTime[i];
+
+	int acc = 0; double dummy = 0;
+	while (acc < timeTill) { // would love to set up a thread to do this in the back and provide a 30 update in the meantime
+		updatePV(state, bodies, soiIdx, stateTime + ++acc, 1, dummy);
+	}
 	pvUnit origState = *state;
 
 	simCartToSph(state->Vel);
@@ -101,19 +96,14 @@ void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double
 	state->Vel = sphToCart(state->Vel);
 	state->Vel = { -state->Vel.x, state->Vel.z, state->Vel.y };
 
-	maneuvers.push_back({origState, *state, dt, name, desc });
-	t3 = std::chrono::system_clock::now();
-	chartTraj(*state, bodies, dt);
-	t4 = std::chrono::system_clock::now();
+	char* saveName = new char[strlen(name) + 1];
+	strncpy(saveName, name, strlen(name) + 1);
+	saveName[strlen(saveName) - 1] = '\0';
+
+	maneuvers.push_back({ origState, *state, dt, saveName, desc });
+
+	*sysThread = std::async(std::launch::async, &ArtSat::chartTraj, this, *state, bodies, dt);
 	chartApproach(bodies, 4);
-	t5 = std::chrono::system_clock::now();
-
-	std::chrono::duration<double> update, traj, appr;
-	update = t2 - t1;
-	traj = t4 - t3;
-	appr = t5 - t4;
-
-	int hook = 5;
 }
 
 void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, double mod) {
@@ -121,6 +111,8 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 
 	if (dt < maneuvers[0].time || lastEphTime != -1 && dt - lastEphTime > 60 * 60 * 24) { // mod is -1 at art sat creation
 		inTime = false;
+		delete satVis;
+		satVis = nullptr;
 		return;
 	}
 	else {
@@ -148,28 +140,88 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 
 
 	if (inTime) {
+		// altitude from earth DEBUG
+		std::vector<double> distances;
+		for (int i = 0; i < maneuvers.size(); i++) {
+			distances.push_back(distanceFind(maneuvers[i].newState.Pos, bodies[3]->getPV(maneuvers[i].time, false, true).Pos));
+		}
 
 		// should refresh orbits at every turning point
 		if (mk1 == nullptr) {
 			chartApproach(bodies, 4);
 		}
 		else {
-			mk1->simPos = mk1->fixedPos + *bodies[soiIdx]->Pos;
-			mk2->simPos = mk2->fixedPos + *bodies[soiIdx]->Pos;
+			mk1->corrPos = *bodies[soiIdx]->Pos;
+			mk2->corrPos = *bodies[soiIdx]->Pos;
+		}
+		if (satVis == nullptr) {
+			satVis = new Marker(1, 1, (glm::vec3)state->Pos, *(bodies[soiIdx]->Pos));
 		}
 
-		// handle state update
-		int counter = dt - stateTime;
+		// handle state update, get close quick with orbit nodes ******** need to handle backwards maneuver travel
+		int counter = dt - stateTime, manJump = 0;
 		double lastTime = stateTime, dummy = 0;
+		if (dt - stateTime > 60 * 100) { // arbitrary const
+			manJump = 1;
+			pvUnit lBpv;
+			// if dt greater than last node go to it and refresh traj
+			if (dt > lBTime[(LINE_BUFF_SIZE_AS / 2) - 2]) {
+				lBpv = lineBuff[LINE_BUFF_SIZE_AS - 2];
+				invStateChange(&lBpv.Pos, &lBpv.Vel);
+				*state = lBpv; // inv state change it!
+				stateTime = lBTime[(LINE_BUFF_SIZE_AS / 2) - 2];
+				refreshTraj(bodies, dt);
+			}
+
+			int i = 0;
+			for (i = 0; i < LINE_BUFF_SIZE_AS / 2; i++) {
+				if (lBTime[i] > dt) {
+					i--;
+					break;
+				}
+			}
+			lBpv = lineBuff[i * 2];
+			invStateChange(&lBpv.Pos, &lBpv.Vel);
+			*state = lBpv;
+			lastTime = lBTime[i];
+			counter = dt - lastTime;
+		}
+		else if (stateTime - dt > 60 * 100) { // going backwards
+			manJump = 1;
+			int i = 0;
+			while (i < maneuvers.size() - 1) {
+				if (floor(maneuvers[i].time) > floor(dt)) {
+					i--;
+					break;
+				}
+				else if (floor(maneuvers[i].time) == floor(dt)) {
+					break;
+				}
+				i++;
+			}
+			*state = maneuvers[i].newState;
+			lastTime = maneuvers[i].time;
+			counter = std::max(dt - lastTime, (double)0);
+		}
+		//float timeStep = 3.0f;
 		while (counter > 0) {
 			updatePV(state, bodies, soiIdx, lastTime++, 1.0f, dummy);
 			counter--;
 		}
+
 		*stateButChanged = *state;
 		stateChange(&(stateButChanged->Pos), &(stateButChanged->Vel));
 		stateTime = dt;
 
+
 		ArtSat::simPos = (glm::vec3)stateButChanged->Pos + *(bodies[soiIdx]->Pos);
+		satVis->fixedPos = (glm::vec3)stateButChanged->Pos;
+		satVis->corrPos = *(bodies[soiIdx]->Pos);
+
+		if (manJump) {
+			// if a big jump (maneuver switch), refresh traj
+			refreshTraj(bodies, dt);
+		}
 
 		// handle stats update
 		stat->timeToApo = abs(apoapsis->time - (dt - stat->initTime));
@@ -178,12 +230,12 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 		stat->distToSoi = vecMag(state->Pos) - bodies[soiIdx]->realRadius;
 
 		// handle model
-		glm::mat4 objModel = glm::mat4(1.0f);
-		Model = glm::translate(objModel, simPos);
+		//glm::mat4 objModel = glm::mat4(1.0f);
+		//Model = glm::translate(objModel, simPos);
 
 		// relativize path to soi position
 		for (int i = 0; i < LINE_BUFF_SIZE_AS; i++) {
-			relLB[i] = lineBuff[i];
+			relLB[i] = { { lineBuff[i].Pos, 2 }, lineColor };
 			relLB[i].pos += *(bodies[soiIdx]->Pos);
 			if (mod == 1) {
 				relLB[i].col = { 0.0f, 0.3f, 1.0f, 0.43f };
@@ -192,17 +244,8 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 	}
 }
 
-
 void ArtSat::ArtSatRender(Camera* camera, Mesh lightSource) {
 	if (inTime) {
-		// shader
-		setShader(lightSource);
-		// draw box
-		sp.Activate();
-		VAOu.Bind();
-
-		camera->Matrix(sp, "camMatrix");
-		glDrawElements(GL_TRIANGLES, sat->indices.size(), GL_UNSIGNED_INT, 0);
 
 		// render lineBuff
 		uniform_data_t uni;
@@ -213,191 +256,191 @@ void ArtSat::ArtSatRender(Camera* camera, Mesh lightSource) {
 		glm::vec2 aa_radii = glm::vec2(2.0f, 2.0f);
 		uni.aa_radius = &aa_radii.x;
 
-		geom_shdr_lines_update(&pathDevice, &relLB,
+		geom_shdr_lines_update(pathDevice, &relLB,
 			LINE_BUFF_SIZE_AS, sizeof(vertex_t), &uni);
 
 		int buffSize = LINE_BUFF_SIZE_AS;
 		if (lB_size_actual != -1)
 			buffSize = lB_size_actual;
-		geom_shdr_lines_render(&pathDevice, buffSize);
+		geom_shdr_lines_render(pathDevice, buffSize);
 
+		satVis->MarkerRender(camera);
 		mk1->MarkerRender(camera);
 		mk2->MarkerRender(camera);
 	}
 }
 
-
-
 ArtSat::~ArtSat() {
 	// delete pvunit, lineBuff, obj Mesh, and locked pos and vel init
-	delete apoapsis;
-	delete periapsis;
 	delete state;
 	delete stateButChanged;
-	delete prevPV;
-	delete sat;
+	delete apoapsis;
+	delete periapsis;
 	delete stat;
+	delete prevPV;
 	delete mk1;
 	delete mk2;
-}
-
-void ArtSat::setShader(Mesh& lightSource) {
-	sp.Activate();
-	// model shader position uniform
-	glUniformMatrix4fv(glGetUniformLocation(sp.ID, "model"), 1, GL_FALSE, glm::value_ptr(Model));
-
-	// model shader color uniform (sun on earth) and shader uniform
-	glUniform4f(glGetUniformLocation(sp.ID, "lightColor"), lightSource.Color.x, lightSource.Color.y, lightSource.Color.z, lightSource.Color.w);
-	glUniform3f(glGetUniformLocation(sp.ID, "lightPos"), (lightSource.Pos)->x, (lightSource.Pos)->y, (lightSource.Pos)->z);
-
-	// uniform for depth and default
-	glUniformMatrix4fv(glGetUniformLocation(sp.ID, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lsMatrix));
-	// uniform for default
-	glUniform1i(glGetUniformLocation(sp.ID, "shadowMap"), 1);
+	geom_shdr_lines_term_device((void**)(&pathDevice));
 }
 
 void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
-	// init vars
-	double itTime = dt;
-	float min = 60.0f;
-	int flpr = -1;
+	while ((threadStop == nullptr || !(*threadStop)) && !fxnStop) {
+		// init vars
+		double itTime = dt;
+		float min = 60.0f;
+		int flpr = -1;
 
-	pvUnit* pvCurr = new pvUnit(pv);
-	pvUnit* pvSC = new pvUnit(pv);
+		pvUnit* pvCurr = new pvUnit(pv);
+		pvUnit* pvSC = new pvUnit(pv);
 
-	stateChange(&(pvSC->Pos), &(pvSC->Vel));
-	lineBuff[0] = vertex_t{ {pvSC->Pos, lineWidth}, lineColor };
-
-	std::vector <glm::dvec3> dynLBN, dynLBS;
-	std::vector <int> soi_list;
-
-	bool close = false, dir = false, dir2 = false;
-	double lastToPV, toPV = 0;
-	int lastItTime = 0; double lastVelocity = 0, velocity = 0;
-	double factor = 1;
-	int tp = 0; // # of turning points
-	int iterations = 0; // total iteration count
-	int ratio = 20; // how to divide 1 minute into default time step (3 sec @ 20)
-	poi apo{ {0,0,0}, 0 }, peri{ {0,0,0}, 0 }; // turning point init
-
-	double* T = new double, * U = new double;
-	double energy_0 = totalEnergy(*pvCurr, bodies[soiIdx]->mass, T, U);
-
-	// init kernel
-	std::vector<double> gKernel = createGaussianKernel(101, 15);
-
-
-	std::chrono::time_point<std::chrono::system_clock> t1, t2, t3, t4, t5;
-	
-	
-
-	t1 = std::chrono::system_clock::now();
-	// scan step
-	while (!close) {
-		iterations++;
-		// reset to forward time after sample pts collected for smoothing
-		if (dynLBN.size() > ((gKernel.size() - 1) / 2) && flpr == -1) {
-			itTime = dt;
-			flpr = 1;
-			*pvCurr = pv;
-			glm::dvec3 dummy;
-			for (int i = 0; i < (dynLBN.size() - 1) / 2; i++) {
-				dummy = dynLBN[i];
-				int dummier = dynLBN.size() - 1 - i;
-				dynLBN[i] = dynLBN[dummier];
-				dynLBN[dummier] = dummy;
-			}
-			t2 = std::chrono::system_clock::now();
-		}
-
-		// a & b check for turning points
-		double a = abs(getAngle(pvCurr->Pos, pvCurr->Vel) - (glm::pi<double>() / 2));
-
-		// generate new prediction
-		updatePV(pvCurr, bodies, soiIdx, itTime, ((flpr * min) / ratio) * factor, energy_0);
-		itTime += ((flpr * min) / ratio) * factor;
-
-		double b = abs(getAngle(pvCurr->Pos, pvCurr->Vel) - (glm::pi<double>() / 2));
-		double c = 0; // checks distance to soi
-
-		// update time step based on velocity (could try acceleration)
-		lastVelocity = velocity;
-		velocity = vecMag(pvCurr->Vel);
-		factor = exp(-((velocity - 9) * 3 / 5)); // could try lV vs. V - make factor large when deltaV is large and vice versa
-		//factor = exp(-(abs(velocity - lastVelocity) * 2)); // fxn doesnt do the trick - need low diff to be a larger number (over 1), high diff to be closer
-		// NEED a threshold like 9 to compare - would need the average difference over the orbit to be universal
-
-		*pvSC = *pvCurr;
 		stateChange(&(pvSC->Pos), &(pvSC->Vel));
-		dynLBN.push_back(pvSC->Pos);
+		lineBuff[0] = *pvSC;
 
-		// smoothing fxn
-		gSmooth(&gKernel, &dynLBN, &dynLBS); // first pt of dynLBS is 0
+		std::vector <pvUnit> dynLBN, dynLBS;
+		std::vector <double> dynTime;
+		dynBuff = &dynLBS;
+		dynTimes = &dynTime;
+
+		bool close = false, dir = false, dir2 = false;
+		double lastToPV, toPV = 0;
+		int lastItTime = 0; double lastVelocity = 0, velocity = 0;
+		double factor = 1;
+		int tp = 0; // # of turning points
+		int iterations = 0; // total iteration count
+		int ratio = 20;
+		poi apo{ {0,0,0}, 0 }, peri{ {0,0,0}, 0 }; // turning point init
+
+		double* T = new double, * U = new double;
+		double energy_0 = totalEnergy(*pvCurr, bodies[soiIdx]->mass, T, U);
+
+		// init kernel
+		std::vector<double> gKernel = createGaussianKernel(101, 15);
 
 
-		// general handling
-		if (dynLBS.size() > 2) {
-			soi_list.push_back((int)energy_0); // re-use variable, not flipping list after backtrack, vecMag(bodies[4]->getPV(dt, false).Pos - pvCurr->Pos)
-			c = vecMag(dynLBS[dynLBS.size() - 1]);
-			lastToPV = toPV;
-			toPV = distanceFind(pv.Pos, dynLBS[dynLBS.size() - 1]);
-			dir2 = dir;
-
-			if (a >= b) // U growing
-				dir = true;
-			else
-				dir = false;
-		}
-
-		// check for turning points / close trigger
-		if (dynLBS.size() > 5) {
-			if (dir != dir2 && (iterations - lastItTime) > 100) {
-				tp++;
-				lastItTime = iterations;
-
-				if (apo.time == 0 || vecMag(apo.Pos) < vecMag(dynLBS[dynLBS.size() - 1])) {
-					apo.Pos = dynLBS[dynLBS.size() - 1]; apo.time = itTime - dt;
-				}
-
-				if (peri.time == 0 || vecMag(peri.Pos) > vecMag(dynLBS[dynLBS.size() - 1])) {
-					peri.Pos = dynLBS[dynLBS.size() - 1]; peri.time = itTime - dt;
+		// scan step
+		while (!close) {
+			iterations++;
+			// reset to forward time after sample pts collected for smoothing
+			if (dynLBN.size() > ((gKernel.size() - 1) / 2) && flpr == -1) {
+				itTime = dt;
+				flpr = 1;
+				*pvCurr = pv;
+				glm::dvec3 dummy;
+				for (int i = 0; i < (dynLBN.size() - 1) / 2; i++) {
+					dummy = dynLBN[i].Pos;
+					size_t dummier = dynLBN.size() - 1 - i;
+					dynLBN[i] = dynLBN[dummier];
+					dynLBN[dummier].Pos = dummy;
 				}
 			}
 
-			if (c < bodies[soiIdx]->radius || (tp == 4 && toPV > lastToPV) || iterations > 5000) // arbitrary constant
-				close = true;
+			// a & b check for turning points
+			double a = abs(getAngle(pvCurr->Pos, pvCurr->Vel) - (glm::pi<double>() / 2));
+
+			// hold times of updates
+			if (flpr == 1) {
+				dynTime.push_back(itTime);
+			}
+			// generate new prediction
+			updatePV(pvCurr, bodies, soiIdx, itTime, ((flpr * min) / ratio) * factor, energy_0);
+			itTime += ((flpr * min) / ratio) * factor;
+
+
+
+			double b = abs(getAngle(pvCurr->Pos, pvCurr->Vel) - (glm::pi<double>() / 2));
+			double c = 0; // checks distance to soi
+
+			// update time step based on velocity (could try acceleration)
+			lastVelocity = velocity;
+			velocity = vecMag(pvCurr->Vel);
+			factor = exp(-((velocity - 9) * 3 / 5)); // could try lV vs. V - make factor large when deltaV is large and vice versa
+			//factor = exp(-(abs(velocity - lastVelocity) * 2)); // fxn doesnt do the trick - need low diff to be a larger number (over 1), high diff to be closer
+			// NEED a threshold like 9 to compare - would need the average difference over the orbit to be universal
+
+			*pvSC = *pvCurr;
+			stateChange(&(pvSC->Pos), &(pvSC->Vel));
+			dynLBN.push_back(*pvSC);
+
+			// smoothing fxn
+			gSmooth(&gKernel, &dynLBN, &dynLBS); // first pt of dynLBS is 0
+
+
+			// general handling
+			if (dynLBS.size() > 2) {
+				c = vecMag(dynLBS[dynLBS.size() - 1].Pos);
+				lastToPV = toPV;
+				toPV = distanceFind(lineBuff[0].Pos, dynLBS[dynLBS.size() - 1].Pos);
+				dir2 = dir;
+
+				if (a >= b) // U growing
+					dir = true;
+				else
+					dir = false;
+			}
+
+			// check for turning points / close trigger
+			if (dynLBS.size() > 5) {
+				if (dir != dir2 && (iterations - lastItTime) > 100) {
+					tp++;
+					lastItTime = iterations;
+
+					if (apo.time == 0 || vecMag(apo.Pos) < vecMag(dynLBS[dynLBS.size() - 1].Pos)) {
+						apo.Pos = dynLBS[dynLBS.size() - 1].Pos; apo.time = itTime - dt;
+					}
+
+					if (peri.time == 0 || vecMag(peri.Pos) > vecMag(dynLBS[dynLBS.size() - 1].Pos)) {
+						peri.Pos = dynLBS[dynLBS.size() - 1].Pos; peri.time = itTime - dt;
+					}
+				}
+
+				if (c < bodies[soiIdx]->radius || (tp >= 3 && toPV > lastToPV) || iterations > 5000) // arbitrary constant
+					close = true;
+			}
+
 		}
+		stat->apoapsis = (vecMag(apo.Pos) / (LENGTH_SCALE)) - bodies[soiIdx]->realRadius;
+		stat->periapsis = (vecMag(peri.Pos) / (LENGTH_SCALE)) - bodies[soiIdx]->realRadius;
+		stat->orbitalPeriod = itTime - dt; // in seconds
 
+		delete T; delete U;
+		*apoapsis = apo;
+		*periapsis = peri;
+
+		fillBuff(&dynLBS, &dynTime);
+
+		dynBuff = nullptr;
+		dynTimes = nullptr;
+
+		delete pvCurr;
+		delete pvSC;
+		fxnStop = true;
 	}
-	stat->apoapsis = (vecMag(apo.Pos) / (LENGTH_SCALE)) - bodies[soiIdx]->realRadius;
-	stat->periapsis = (vecMag(peri.Pos) / (LENGTH_SCALE)) - bodies[soiIdx]->realRadius;
-	stat->orbitalPeriod = itTime - dt; // in seconds
+	fxnStop = false;
+}
 
-	delete T; delete U;
-	*apoapsis = apo;
-	*periapsis = peri;
+void ArtSat::fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime) {
 
+	if (dynBuff == nullptr)
+		return;
 
-
-	t3 = std::chrono::system_clock::now();
 	// fill step lineBuff with dynLineBuff
-	float sum = dynLBS.size() / (float)((LINE_BUFF_SIZE_AS - 2) / 2);
+	float sum = dynBuff->size() / (float)((LINE_BUFF_SIZE_AS - 2) / 2);
 	int j = 1; float overflow = 0; int overflowAmt = 0;
 	bool sumUnderOne = false; bool overflowNow = false;
 
 	// handle sub orbital trajectories
 	if (sum < 1) {
 		sumUnderOne = true;
-		lB_size_actual = dynLBS.size();
+		lB_size_actual = dynBuff->size();
 	}
 	else {
 		lB_size_actual = -1;
 	}
 
 	// fill loop, divides dynLBS evenly depending on line buff size
-	for (int k = 0; k < dynLBS.size(); k++) {
+	for (int k = 0; k < dynBuff->size(); k++) {
 		overflowNow = false;
-		while (!sumUnderOne && ((k - overflowAmt) % (int)sum) != 0 && k < dynLBS.size()) {
+		while (!sumUnderOne && ((k - overflowAmt) % (int)sum) != 0 && k < dynBuff->size()) {
 			k++;
 		}
 		overflow += sum - (int)sum;
@@ -405,87 +448,100 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 			k++; overflowNow = true; overflowAmt++;
 			overflow = overflow - (int)overflow;
 		}
-		if (k < dynLBS.size() && (overflowNow || !sumUnderOne) && j < LINE_BUFF_SIZE_AS - 1) { // shouldnt need last check
-			lineBuff[j] = vertex_t{ {(glm::vec3)dynLBS[k], 2}, lineColor }; // should make alternate soi more green,  + glm::vec4{0,soi_list[k] * 0.7,0,0}
+		if (k < dynBuff->size() && (overflowNow || !sumUnderOne) && j < LINE_BUFF_SIZE_AS - 1) { // shouldnt need last check
+			lineBuff[j] = { (*dynBuff)[k] }; 
 			lineBuff[j + 1] = lineBuff[j];
+			lBTime[j / 2] = (*dynTime)[k];
 			j += 2;
 		}
 	}
-	t4 = std::chrono::system_clock::now();
-	std::chrono::duration<double> aaprelim, aascan, aafill;
-	aaprelim = t2 - t1;
-	aascan = t3 - t1;
-	aafill = t4 - t3;
-
 
 
 	lineBuff[LINE_BUFF_SIZE_AS - 1] = lineBuff[0];
+	// ensure closure only when the orbits should close
+	if (distanceFind(lineBuff[LINE_BUFF_SIZE_AS - 1].Pos, lineBuff[LINE_BUFF_SIZE_AS - 2].Pos) >
+		(2 * distanceFind(lineBuff[LINE_BUFF_SIZE_AS - 2].Pos, lineBuff[LINE_BUFF_SIZE_AS - 3].Pos))) {
+		lineBuff[LINE_BUFF_SIZE_AS - 1] = lineBuff[LINE_BUFF_SIZE_AS - 2];
+	}
 
-	delete pvCurr;
-	delete pvSC;
 }
 
 void ArtSat::chartApproach(std::vector<Mesh*> bodies, int targetID) {
-	// could add all this to the probe step in traj, would be more efficient instead of running through update again
 
-	// update state through orbital period until distance goes down and comes back up or lowest distance
 	double dist = INT_MAX, dummy = 0;
-	pvUnit pv = *state;
-	int acc = 1;
-	float timeStep = 60 * 5;
+	int closestNode = 0;
 
-	glm::dvec3 caPos = pv.Pos;
-	double caTime = 0;
-	double roughEstTime = 0;
 
-	while (acc < stat->orbitalPeriod) {
-		// these udpatePV loops would greatly benefit from a reliable velocity based multiplticative factor
-		updatePV(&pv, bodies, soiIdx, stateTime + acc, timeStep, dummy);
-
-		glm::vec3 bodyPos = bodies[targetID]->getPV(stateTime + acc, false, true).Pos;
-		bodyPos = -bodyPos;
-
-		double newDist = distanceFind(pv.Pos, bodyPos);
-		if (newDist < dist) {
-			dist = newDist;
-			roughEstTime = stateTime + acc;
+	// loop through LB time and find closest pt in orbit to planet, then march back one pt and iterate to get the exact pt
+	for (int i = 0; i < LINE_BUFF_SIZE_AS;) { // only searches 100 pts
+		double dummyDist = distanceFind(lineBuff[i].Pos, bodies[targetID]->getPV(lBTime[i/2], true, true).Pos);
+		if (dummyDist < dist) {
+			dist = dummyDist;
+			closestNode = i;
 		}
-		acc += timeStep;
+		i += 2;
 	}
 
-	pv = *state;
-	acc = 0;
-	timeStep = 15;
 	dist = INT_MAX;
+	pvUnit pv = lineBuff[closestNode - 2], pvb4 = pv;
+	invStateChange(&(pv.Pos), &(pv.Vel));
+	double time = lBTime[(closestNode - 2) / 2];
+	double timeStep = 3.0;
 
-	// would benefit from valid pv points along trajectory pre calculated?
-	while (acc < (roughEstTime + (60 * 5) - stateTime)) {
-		updatePV(&pv, bodies, soiIdx, stateTime + acc, timeStep, dummy);
-		if (acc > (roughEstTime - (60 * 5) - stateTime)) {
-
-			glm::vec3 bodyPos = bodies[targetID]->getPV(stateTime + acc, false, true).Pos;
-			bodyPos = -bodyPos;
-
-			double newDist = distanceFind(pv.Pos, bodyPos);
-			if (newDist < dist) {
-				dist = newDist;
-				caPos = pv.Pos;
-				caTime = stateTime + acc;
-			}
+	while (0) { // 0 is false
+		updatePV(&pv, bodies, soiIdx, time, timeStep, dummy);
+		double dummyDist = distanceFind(pv.Pos, bodies[targetID]->getPV(time + timeStep, false, true).Pos);
+		if (dummyDist > dist) {
+			dist = dummyDist;
+			break;
 		}
-		acc += timeStep;
-	}
+		dist = dummyDist;
+		time += timeStep;
+		pvb4 = pv;
+	}	
 
-	stateChange(&(caPos), &(pv.Vel));
-
-	mk1 = new Marker(1, 1, (glm::vec3)caPos, *(bodies[soiIdx]->Pos));
-	mk2 = new Marker(1, 1, (glm::vec3)(bodies[targetID]->getPV(caTime, true, false).Pos), *(bodies[soiIdx]->Pos)); // scheme changes for planet targets
+	mk1 = new Marker(0, 1, (glm::vec3)pvb4.Pos, *(bodies[soiIdx]->Pos));
+	mk2 = new Marker(0, 1, (glm::vec3)(bodies[targetID]->getPV(time, true, false).Pos), *(bodies[soiIdx]->Pos)); // scheme changes for planet targets
 	closeApproachDist = dist;
 }
 
 void ArtSat::refreshTraj(std::vector<Mesh*> bodies, double dt) {
 	chartTraj(*state, bodies, dt);
 	chartApproach(bodies, 4);
+}
+
+// integrate two traj's and add maneuver to bridge the gap
+void ArtSat::solveManeuver(std::vector<Mesh*> bodies, char* name, pvUnit pv1, pvUnit pv2, double t1, double t2) {
+	std::vector<pvUnit> pvAL, pvBL;
+	pvUnit pvA = pv1, pvB = pv2;
+	double dummy, timeStep = 3;
+
+	for (int i = 0; i < t2 - t1; ) { // compile trajectories
+		pvAL.push_back(pvA);
+		pvBL.push_back(pvB);
+		updatePV(&pvA, bodies, soiIdx, t1 + i, timeStep, dummy);
+		updatePV(&pvB, bodies, soiIdx, t2 - i, -timeStep, dummy);
+		i += timeStep; 
+	}
+	for (int i = 0; i < pvBL.size() / 2; i++) { // flip backprop
+		pvUnit d2 = pvBL[i];
+		pvBL[i] = pvBL[pvBL.size() - 1 - i];
+		pvBL[pvBL.size() - 1 - i] = d2;
+	}
+
+	// find intersect, add maneuver to list
+	int i = 0; double dist = INT_MAX;
+	while (1) {
+		double trajDist = distanceFind(pvAL[i].Pos, pvBL[i].Pos);
+		if (trajDist > dist) {
+			break;
+		}
+		dist = trajDist;
+		i++;
+	}
+	char* saveName = new char[strlen(name) + 1];
+	strncpy(saveName, name, strlen(name) + 1);
+	maneuvers.push_back({ pvAL[i], pvBL[i],  t1 + (3 * i), saveName, "?" });
 }
 
 
@@ -523,9 +579,12 @@ glm::dvec3 accel_comp(pvUnit pv, std::vector<Mesh*> bodies, int soiIdx, double d
 	}
 	pvUnit pvToSun = pv + soi;
 
-	std::vector<double> str;
+	std::vector<double> str; // hold influence of each body
 	for (int i = 0; i < bodies.size(); i++) {
-		pvUnit pvToBody = pvToSun - bodies[i]->getPV(dt, false, true); // need mod for moons
+		pvUnit pvToBody = pvToSun;
+		if (i != 0) {
+			pvToBody = pvToBody - bodies[i]->getPV(dt, false, true);
+		}
 		if (bodies[i]->isMoon) {
 			pvToBody = pvToSun - (bodies[i]->gravSource->getPV(dt, false, true) + bodies[i]->getPV(dt, false, true));
 		}
@@ -633,18 +692,22 @@ void updatePV(pvUnit* pv, std::vector<Mesh*> bodies, int soiIndex, double dt, fl
 	*pv = *pv + change; // return to local pv
 }
 
-int gSmooth(std::vector<double>* kernel, std::vector<glm::dvec3>* noisy, std::vector<glm::dvec3>* smooth) {
+int gSmooth(std::vector<double>* kernel, std::vector<pvUnit>* noisy, std::vector<pvUnit>* smooth) {
 	// init
-	glm::dvec3 dummy( 0.0, 0.0, 0.0 );
+	glm::dvec3 dummyPos( 0.0, 0.0, 0.0 );
+	glm::dvec3 dummyVel( 0.0, 0.0, 0.0 );
 	if (noisy->size() < kernel->size()) return 1;
 
 	// utilize kernel 
 	for (int i = 0; i < kernel->size(); i++) {
-		glm::dvec3 obj = noisy->at(noisy->size() - kernel->size() + i);
-		obj *= (*kernel)[i];
-		dummy += obj;
+		glm::dvec3 objPos = noisy->at(noisy->size() - kernel->size() + i).Pos;
+		glm::dvec3 objVel = noisy->at(noisy->size() - kernel->size() + i).Vel;
+		objPos *= (*kernel)[i];
+		objVel *= (*kernel)[i];
+		dummyPos += objPos;
+		dummyVel += objVel;
 	}
-	smooth->push_back(dummy);
+	smooth->push_back({dummyPos, dummyVel});
 	return 0; 
 }
 
@@ -659,6 +722,8 @@ void simCartToSph(glm::dvec3& cart) {
 	cart[1] = cart[2];
 	cart[2] = dummy;
 }
+
+
 
 
 /*

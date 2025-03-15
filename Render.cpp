@@ -235,9 +235,9 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, do
 				for (int j = 0; j < (*bodies[i]).lineBufferSize; j++) {
 					(*bodies[i]).lineBuffer[j].col = (*bodies[i]).lineColor;
 				}
-				geom_shdr_lines_update(&bodies[i]->pathDevice, &bodies[i]->lineBuffer,
+				geom_shdr_lines_update(bodies[i]->pathDevice, &bodies[i]->lineBuffer,
 					bodies[i]->lineBufferSize, sizeof(vertex_t), &uni);
-				geom_shdr_lines_render(&bodies[i]->pathDevice, bodies[i]->lineBufferSize);
+				geom_shdr_lines_render(bodies[i]->pathDevice, bodies[i]->lineBufferSize);
 			}
 			
 			if ((*bodies[i]).bIdx != -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
@@ -282,9 +282,9 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, do
 					k2++;
 				}
 				
-				geom_shdr_lines_update(&(*bodies[i]).pathDevice, llB,
+				geom_shdr_lines_update((*bodies[i]).pathDevice, llB,
 					llBSize - brGap + 1, sizeof(vertex_t), &uni);
-				geom_shdr_lines_render(&(*bodies[i]).pathDevice, llBSize - brGap + 1);
+				geom_shdr_lines_render((*bodies[i]).pathDevice, llBSize - brGap + 1);
 			}
 
 		}

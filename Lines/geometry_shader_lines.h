@@ -52,7 +52,7 @@ typedef struct geom_shader_lines_device
 } geom_shader_lines_device_t
 ;
 
-geom_shader_lines_device_t geom_shdr_lines_init_device( void );
+geom_shader_lines_device_t* geom_shdr_lines_init_device( void );
 uint32_t geom_shdr_lines_update(geom_shader_lines_device_t* device, const void* data, int32_t n_elems, int32_t elem_size,
                                  uniform_data_t* uniform_data);
 void geom_shdr_lines_render( const geom_shader_lines_device_t* device, const int32_t count );

@@ -1,7 +1,11 @@
+#define _CRTDBG_MAP_ALLOC
+#include <cstdlib>
+#include <crtdbg.h>
 #include "System.h"
 #include "Object.h"
 #include "Render.h"
 #include "GUI.h"
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -12,9 +16,13 @@ struct WindowData {
 	Camera* camera;
 };
 
+
 int main() {
 	// glfw initiatizer
-	glfwInit();
+	glfwInitHint(GLFW_JOYSTICK_HAT_BUTTONS, GLFW_FALSE);
+	if (!glfwInit()) {
+		return -1;
+	}
 	// Tells glfw what type of opengl I use
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -48,6 +56,7 @@ int main() {
 	glEnable(GL_DEPTH_TEST);
 	// initialize Camera with initial position
 	Camera camera(width, height, glm::vec3(130.0f, 0.0f, 0.0f));
+	Sys.camera = &camera;
 
 	WindowData data = { width, height, &camera};
 	glfwSetWindowUserPointer(window, &data);
@@ -68,7 +77,7 @@ int main() {
 
 	Sys.SystemTime();
 
-	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, &Sys.simTime.time_in_sec, Sys.bodies, &camera, &Sys.artSats};
+	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, &Sys.simTime.time_in_sec, &Sys };
 	GUI gui(window, guiData);
 
 	std::cout << "beginning sim" << std::endl; 
@@ -111,7 +120,7 @@ int main() {
 		
 		//Handle changes
 		Sys.orbLineHandle((camera).Position);
-		Sys.ArtSatHandle(Sys.bodies, &camera, Sys.simTime.time_in_sec, dt);
+		Sys.ArtSatHandle(&camera, Sys.simTime.time_in_sec, dt);
 
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
@@ -133,7 +142,7 @@ int main() {
 	}
 
 	// terminatation handling
-	Sys.deleteSystem(); // need new fxn NOW FROM SYSTEM
+	Sys.~System(); // need new fxn NOW FROM SYSTEM
 	glfwDestroyWindow(window);
 	glfwTerminate();
 	gui.guiDestroy();

@@ -24,9 +24,6 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	else isMoon = false;
 
 	
-	// initialize all kernels here, once (happens once for each body dumbass)
-	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
-	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 
 	// set object light emission color if any
 	if (isLight == true) {
@@ -222,7 +219,10 @@ void Mesh::Draw(Camera& camera) {
 void Mesh::Rotate(Mesh* lightSource, double UTCtime) { 
 	SpiceDouble w[3];
 	SpiceInt dim;
+
+	(*spiceMtx).lock();
 	bodvcd_c(spiceID, "PM", 3, &dim, w); // this angle is equivalent to the rotation angle, no need for rotation rates to be preprogrammed
+	(*spiceMtx).unlock();
 
 	float angle = glm::radians((float)w[0] + w[1] * ((UTCtime) / 86400)) + glm::pi<float>();
 	// transforms model matrix by rotation
@@ -233,9 +233,10 @@ void Mesh::Rotate(Mesh* lightSource, double UTCtime) {
 }
 
 void Mesh::AxialTilt(GLfloat tiltDeg) {
-	SpiceDouble ra[3], dec[3], lambda[1];
+	SpiceDouble ra[3], dec[3];
 	// the first constant in each of above is sufficient for the time scales of this program
 	SpiceInt dim;
+
 	bodvcd_c(spiceID, "POLE_RA", 3, &dim, ra);
 	bodvcd_c(spiceID, "POLE_DEC", 3, &dim, dec);
 
@@ -260,7 +261,11 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	SpiceDouble state[6];
 	SpiceDouble lt;
 	double et = UTCtime - UTC2J2000; // UTC to J2000
+
+	(*spiceMtx).lock();
 	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
+	(*spiceMtx).unlock();
+
 	stateChange(state);
 	glm::vec3 tempPos= glm::vec3(state[0], state[1], state[2]);
 	if (isMoon && gravSource->Pos != nullptr) tempPos += *(gravSource->Pos); 
@@ -319,7 +324,11 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	if (!areRings) {
 		if (distanceFind(cameraPos, *Pos) < refinedRadius && bIdx == -1) {
 			refinedList = new vertex_t[REF_LIST_SIZE];
+
+			(*spiceMtx).lock();
 			makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+			(*spiceMtx).unlock();
+
 			refNodeMarkerTime = UTCtime;
 			lBNodeMarkerTime = UTCtime;
 		}
@@ -337,8 +346,10 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 			if (numRefVerts >= REF_LIST_SIZE_U) { //redo
 				refNodeMarkerTime = UTCtime;
 				lBNodeMarkerTime = UTCtime;
-				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
 
+				(*spiceMtx).lock();
+				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+				(*spiceMtx).unlock();
 			}
 			else if (numRefVerts > 0) { //modify
 				// handle time overflow
@@ -372,7 +383,11 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 				refListStartIdx = (refListStartIdx + REF_LIST_SIZE) % REF_LIST_SIZE;
 
 				for (int i = 0; i < numRefVerts; i++) {
+
+					(*spiceMtx).lock();
 					spkezr_c(std::to_string(baryID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "J2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
+					(*spiceMtx).unlock();
+
 					stateChange(stateDt);
 					
 
@@ -438,12 +453,33 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	}
 	Mesh::lastItTime = UTCtime;
 }
-
+/*
+Mesh::~Mesh() {
+	name = nullptr;
+	Pos = nullptr;
+	oPos = nullptr;
+	soiID = nullptr;
+	refinedList = nullptr;
+	spiceMtx = nullptr;
+	ShaderProgram.Delete();
+	shadowShaderProgram.Delete();
+	VAO.Delete();
+	if (pathDevice != nullptr) {
+		geom_shdr_lines_term_device((void**)&pathDevice);
+		pathDevice = nullptr;
+	}
+	// could/should save & delete VBO/EBO
+}
+*/
 pvUnit Mesh::getPV(double time, bool stateChanged, bool rotated) { // *** add boolean for state change version instead
+	std::lock_guard<std::mutex> lock(*spiceMtx);
+
 	SpiceDouble state[6];
 	SpiceDouble lt;
 	double et = time - UTC2J2000;
 	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
+
+	
 	if (stateChanged) stateChange(state);
 	if (!stateChanged && rotated) {
 		glm::vec3 vec = glm::vec3(state[0], state[1], state[2]);
@@ -519,13 +555,16 @@ void stateChange(glm::dvec3* pos, glm::dvec3* vel) {
 	glm::dmat4 rotationMatrix = glm::rotate(glm::dmat4(1.0), -23.4, glm::dvec3(1.0, 0, 0));
 	*pos = rotationMatrix * glm::dvec4(*pos, 1.0);
 	*vel = rotationMatrix * glm::dvec4(*vel, 1.0);
-	/*
-	double dummy = 0.0;
-	dummy = (*pos)[0]; (*pos)[0] = (*pos)[1];
-	(*pos)[1] = (*pos)[2]; (*pos)[2] = dummy;
+}
 
-	dummy = (*vel)[0]; (*vel)[0] = (*vel)[1];
-	(*vel)[1] = (*vel)[2]; (*vel)[2] = dummy;*/
+void invStateChange(glm::dvec3* pos, glm::dvec3* vel) {
+	for (int i = 0; i < 3; i++) {
+		(*pos)[i] = (*pos)[i] / LENGTH_SCALE;
+		(*vel)[i] = (*vel)[i] / LENGTH_SCALE;
+	}
+	glm::dmat4 rotationMatrix = glm::rotate(glm::dmat4(1.0), 23.4, glm::dvec3(1.0, 0, 0));
+	*pos = rotationMatrix * glm::dvec4(*pos, 1.0);
+	*vel = rotationMatrix * glm::dvec4(*vel, 1.0);
 }
 
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {

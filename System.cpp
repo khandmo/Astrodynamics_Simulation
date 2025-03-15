@@ -3,8 +3,13 @@
 
 //double distanceFind(glm::vec3 state1, glm::vec3 state2);
 void stateVecToSim(char* vec, state& someState);
+void sat2CSV(ArtSat& sat, char* buff, int& buffSize);
+void csv2Sat(ArtSat& sat, char* buff, std::vector<Mesh*>* bodies);
 
 System::System() {
+	// init SPICE kernels
+	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
+	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
 	// initialize radius as true radius in km divided by a factor of 6100/4550000000 to be consistent with orbital distances
 	bodiesActual.push_back(initBody("Sun", "Textures/SQmercury.jpg", 1.989f * pow(10, 10), 696340.0f, 0.0f, 0.0f, 0.0f, true, false, "0", 10, 10, 0)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
@@ -22,6 +27,7 @@ System::System() {
 	// transplant bodies addresses
 	for (int i = 0; i < bodiesActual.size(); i++) {
 		bodies.push_back(&bodiesActual[i]);
+		bodies[i]->spiceMtx = &mtx;
 		if (bodies[i]->isLightSource) {
 			lightBodies.push_back(bodies[i]);
 		}
@@ -35,8 +41,8 @@ System::System() {
 
 	// init art sats
 	// program to take artSats and name of ephemeris data, process and add mission + maneuver to persistent memory
-
-	initSat("Artemis 1", "horizons_results_raw.txt", artSats);
+	initPersistSats("persistent_sats.txt");
+	initSat("Artemis 1", "horizons_results_raw.txt", "persistent_sats.txt");
 
 	// time memory save
 	sysTime = *(time_block*) malloc(sizeof(time_block));
@@ -78,7 +84,17 @@ Mesh System::initBody(const char* name, const char* texFilePath, float mass, flo
 	return body;
 }
 
-void System::initSat(const char* name, const char* eph, std::vector<ArtSat>& artSats) {
+void System::initSat(const char* name, const char* eph, const char* prstnt) {
+
+	// check if name is already in ArtSat list (initialized from persistent memory)
+	for (int i = 0; i < artSats.size(); i++) {
+		if (strstr(artSats[i].name, name) != nullptr) {
+			return;
+		}
+	}
+
+	std::cout << "adding new satellite to simulation...";
+
 	// hold maneuvers
 	char* mane[100];
 
@@ -90,98 +106,137 @@ void System::initSat(const char* name, const char* eph, std::vector<ArtSat>& art
 		return;
 	}
 
-	bool close = false;
 	int maneIdx = 0;
-	while (!close) {
+	while (1) {
 		// get maneuver information
 		char* buff = new char[300];
-		dataStream.getline(buff, 300);
-
-		if (buff[0] == buff[1] && buff[1] == buff[2] && buff[2] == '*' || maneIdx > 19) { // *** terminates maneuver information
-			break;
-		}
-		mane[maneIdx++] = buff;
-	}
-
-	char buff[300];
-	state someState;
-	dataStream.getline(buff, 300);
-	stateVecToSim(buff, someState);
-
-	ArtSat* test = new ArtSat();
-	double testTime = someState.time;
-	test->ArtSatPlan({ someState.pos, someState.vel }, testTime, 3, bodies);
-	test->name = name;
-
-	// initialize at first line time, state
-	// add maneuvers when the time equals the next mane
-	// just modify velocity
-	// need little function for parsing the maneuver and persistent data to apply logic to
-
-	// need to know if mission is over, when, and if not what the current state is (cheat) and 
-	// update in a file with the ability to read and propogate from the last input location
-
-	// grab maneuvers, end state
-	char altBuff[300];
-	int maneIdx2 = 1;
-	while (1) {
-		strcpy(altBuff, buff);
 		dataStream.getline(buff, 300);
 
 		if (buff[0] == buff[1] && buff[1] == buff[2] && buff[2] == '*') { // *** terminates maneuver information
 			break;
 		}
-		/* maneuver importing below
-		char* altBuff2 = new char, * altBuffTime = new char;
-		strncpy(altBuff2, buff, sizeof(buff));
-		altBuff2 += 24;
-		strncpy(altBuffTime, altBuff2, sizeof(buff) - 24);
-		altBuffTime += 12;
-		altBuff2[12] = '\0';
-		altBuffTime[2] = '\0';
+		mane[maneIdx++] = buff;
+	}
 
-		char* subS = strstr(mane[maneIdx2], altBuff2);
-		char* subsubS = subS + 12;
-		subsubS[2] = '\0';
-		if (subS != nullptr) { // if date of a maneuver
+	// parse and save launch information
+	char buff[300] = "";
+	char buffBack[300] = "";
+	state someState;
+	dataStream.getline(buff, 300);
+	stateVecToSim(buff, someState);
 
-			if (std::stoi(altBuffTime) - std::stoi(subsubS) < 6){// ****** assume ephermis data taken 6 hours apart
-				// if time right after a maneuver
-				// add maneuver (in buff) to satellite, 
+	ArtSat* sat = new ArtSat();
+	double testTime = someState.time;
+	sat->ArtSatPlan({ someState.pos, someState.vel }, testTime, 3, bodies);
+	sat->name = name;
 
+	// parse and save maneuvers, end state
+	int maneIdx2 = 1;
+	while (1) {
+		dataStream.getline(buff, 300);
+
+		if (buff[0] == buff[1] && buff[1] == buff[2] && buff[2] == '*' || maneIdx2 > maneIdx - 1) { // *** terminates maneuver information
+			break;
+		}
+		//maneuver importing below, buff for date and time of data point
+		char dateBuff[300], timeBuff[300];
+		strncpy(dateBuff, buff + 24, sizeof(buff) - 24);
+		strncpy(timeBuff, dateBuff + 12, sizeof(buff) - 35);
+		dateBuff[12] = '\0';
+		timeBuff[2] = '\0';
+
+		char* man_date = strstr(mane[maneIdx2], dateBuff);
+		if (man_date != nullptr) { // if data line is date of a maneuver
+			
+			char* man_time = man_date + 12;
+			man_time[2] = '\0'; // hold the time of maneuver
+
+			int diff = std::stoi(timeBuff) - std::stoi(man_time);
+			if (diff > 0 && diff < 6 || std::stoi(timeBuff) > 18){// ****** assume ephermis data taken 6 hours apart
+				
+				char man_name[300] = "";
+				strncpy(man_name, mane[maneIdx2] + 2, strlen(mane[maneIdx2]) - 1);
+				size_t end = strcspn(man_name, " ");
+				man_name[end] = '\0';
+
+				state aState, bState;
+				stateVecToSim(buff, bState);
+				stateVecToSim(buffBack, aState);
+				sat->solveManeuver(bodies, man_name, { aState.pos, aState.vel }, { bState.pos, bState.vel }, aState.time, bState.time);			
+				
 				maneIdx2++;
 			}
-			else if (std::stoi(altBuffTime) > 18) {
-				// if first thing tomorrow is soonest after maneuver
-
-			}
-
 		}
-
-		delete altBuff2;
-		delete altBuffTime;
-		*/
+		strncpy(buffBack, buff, strlen(buff) + 1);
+		buffBack[(strlen(buff))] = '\0';
+		
 	}
-	char* token = strtok(altBuff, ";");
+	char* token = strtok(buffBack, ";");
 	double endTime = atof(token);
 	endTime = (endTime - 2440587.5) * 86400.0; // to UNIX
 	// add to artSat, check time at update
 
+	dataStream.clear();
 	dataStream.close();
 
 
-	test->lastEphTime = endTime;
-	artSats.push_back(*test);
+	sat->lastEphTime = endTime;
+	artSats.push_back(*sat);
 
 
-	// free all mane's
+	// free all held maneuver strings
 	while (maneIdx != 0) {
 		delete mane[--maneIdx];
 	}
 
+	std::cout << "new satellite " << sat->name << " added\n";
+
+	// add sat to end of persistent txt (w/ new line at end)
+	std::fstream dataStream2(prstnt, std::fstream::out | std::fstream::app); // should just read
+	if (!dataStream2) {
+		std::cout << "File " << prstnt << " failed to open / create\n";
+		dataStream.clear();
+		return;
+	}
+	
+	char buff2[10000] = "";
+	int buff2Size = 0;
+	sat2CSV(*sat, buff2, buff2Size);
+
+	dataStream2.seekp(0, std::fstream::end);
+	dataStream2.write(buff2, buff2Size);
+	dataStream2.write("\n", 1);
+	dataStream2.clear();
+	dataStream2.close();
+
 }
 
-void System::ArtSatHandle(std::vector<Mesh*> bodies, Camera* camera, double dt, int tW) {
+void System::initPersistSats(const char* file) {
+
+	std::fstream dataStream(file, std::fstream::in); // should just read
+	if (!dataStream) {
+		std::cout << "File " << file << " failed to open / create\n";
+		dataStream.clear();
+		return;
+	}
+	
+	char buff[10000] = "";
+	dataStream.getline(buff, 10000);
+	while (!dataStream.eof()) {
+		ArtSat* sat = new ArtSat;
+		csv2Sat(*sat, buff, &bodies);
+		artSats.push_back(*sat);
+		dataStream.getline(buff, 10000);
+	}
+
+
+	dataStream.clear();
+	dataStream.close();
+
+	// sat info is wiped after this function exits
+}
+
+void System::ArtSatHandle(Camera* camera, double dt, int tW) {
 
 	for (int i = 0; i < artSats.size(); i++) {
 		artSats[i].ArtSatUpdState(bodies, dt, tW,  0);
@@ -282,8 +337,33 @@ void System::orbLineHandle(glm::vec3 cameraPos) {
 	}
 }
 
-// time functions
+System::~System() {
+	for (auto& body : bodies) {
+		body = nullptr;
+	}
+	for (auto& body : lightBodies) {
+		body = nullptr;
+	}
+	for (auto& body : dullBodies) {
+		body = nullptr;
+	}
+	for (auto& pos : bodyPos) {
+		pos = nullptr;
+	}
+	for (auto& pos : satPos) {
+		pos = nullptr;
+	}
+	for (auto& body : bodiesActual) {
+		body.~Mesh();
+	}
+	dS.Delete();
+	lS.Delete();
+	dullShader = nullptr;
+	lightShader = nullptr;
+}
 
+
+// time functions
 
 
 void System::SystemTime() {
@@ -320,8 +400,6 @@ void System::time_block_ms_add(time_block &someTime, int sum, bool sign) {
 	}
 }
 
-
-
 void System::WarpClockSet(const int currWarp) {
 	// find current time and time elapsed since last update
 
@@ -355,7 +433,6 @@ void System::WarpClockSet(const int currWarp) {
 			(simTime.timeUnit).time_since_epoch().count();
 
 		sysTime = currTime;
-		//std::cout << simTime.timeString << '\n';
 	}
 }
 
@@ -371,16 +448,18 @@ void System::ArgClockSet(double dt) {
 
 void stateVecToSim(char* vec, state& someState) {
 	// read line of ephemeris data and transform into state info in sim frame
-	char* endPtr;
+	char* endPtr, dVec[300];
+	strncpy(dVec, vec, strlen(vec));
 
-	char* token = strtok(vec, ",");
+	char* token = strtok(dVec, ",");
 	double JDTDB = atof(token);
 	someState.time = (JDTDB - 2440587.5) * 86400.0; // to UNIX
 	
 	token = strtok(NULL, ",");
 	char dummy[30];
 	strncpy(dummy, token + 5, 18);
-	someState.date = dummy + '\0'; // can compare directly to maneuver data
+	dummy[18] = '\0';
+	someState.date = dummy; // can compare directly to maneuver data
 
 	token = strtok(NULL, ",");
 	someState.pos.x = strtod(token, &endPtr);
@@ -401,12 +480,133 @@ void stateVecToSim(char* vec, state& someState) {
 	someState.vel.z = strtod(token, &endPtr);
 }
 
+// below is for adding / removing from persistent memory file
+void sat2CSV(ArtSat& sat, char* buff, int &buffSize) {
+	char temp[10000] = "";
+	strncat(temp, sat.name, strlen(sat.name));
+	int pl = strlen(temp);
+	temp[pl++] = ',';
+	for (int i = 0; i < sat.maneuvers.size(); i++) {
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].time);
+		pl = strlen(temp);
+		
+		strncat(temp, sat.maneuvers[i].name, strlen(sat.maneuvers[i].name));
+		pl = strlen(temp);
+		temp[pl++] = ',';
 
+		strncat(temp, sat.maneuvers[i].desc, strlen(sat.maneuvers[i].desc));
+		pl = strlen(temp);
+		temp[pl++] = ',';
 
-void System::deleteSystem() {
+		// old State
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].origState.Pos.x);
+		pl = strlen(temp);
 
-	// free all art sats
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].origState.Pos.y);
+		pl = strlen(temp);
 
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].origState.Pos.z);
+		pl = strlen(temp);
 
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].origState.Vel.x);
+		pl = strlen(temp);
+
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].origState.Vel.y);
+		pl = strlen(temp);
+
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].origState.Vel.z);
+		pl = strlen(temp);		
+
+		// new State
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].newState.Pos.x);
+		pl = strlen(temp);
+
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].newState.Pos.y);
+		pl = strlen(temp);
+
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].newState.Pos.z);
+		pl = strlen(temp);
+
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].newState.Vel.x);
+		pl = strlen(temp);
+
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].newState.Vel.y);
+		pl = strlen(temp);
+
+		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].newState.Vel.z);
+		pl = strlen(temp);
+	}
+	temp[strlen(temp) + 1] = '\0';
+	strncpy(buff, temp, strlen(temp));
+	buffSize = strlen(temp);
 }
+
+void csv2Sat(ArtSat& sat, char* buff, std::vector<Mesh*> *bodies) {
+	char* token = strtok(buff, ",");
+	sat.name = _strdup(token);
+
+	char* endptr;
+	double time;
+	pvUnit oState, nState;
+
+	token = strtok(NULL, ",");
+	while (token != NULL) {
+		time = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		char* name = new char[strlen(token) + 1];
+		strncpy(name, token, strlen(token) + 1);
+
+		token = strtok(NULL, ",");
+		char* desc = new char[strlen(token) + 1];
+		strncpy(desc, token, strlen(token) + 1);
+
+		// old State
+		token = strtok(NULL, ",");
+		oState.Pos.x = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		oState.Pos.y = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		oState.Pos.z = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		oState.Vel.x = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		oState.Vel.y = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		oState.Vel.z = strtod(token, &endptr);
+
+		// new State
+		token = strtok(NULL, ",");
+		nState.Pos.x = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		nState.Pos.y = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		nState.Pos.z = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		nState.Vel.x = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		nState.Vel.y = strtod(token, &endptr);
+
+		token = strtok(NULL, ",");
+		nState.Vel.z = strtod(token, &endptr);
+
+		if (sat.maneuvers.size() == 0 && bodies != nullptr) 
+			sat.ArtSatPlan(oState, time, 3, *bodies);
+		else
+			sat.maneuvers.push_back({ oState, nState, time, name, desc });
+		
+		token = strtok(NULL, ",");
+	}
+	sat.lastEphTime = sat.maneuvers[sat.maneuvers.size() - 1].time;
+}
+
 

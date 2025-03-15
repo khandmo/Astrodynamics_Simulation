@@ -2,17 +2,19 @@
 #ifndef ART_SAT_H
 #define ART_SAT_H
 
-#include "Mesh.h" // might not be the right include
+#include "Mesh.h"
 #include "Object.h"
 #include "Marker.h"
 #include "Lines/geometry_shader_lines.h"
 #include "SpiceUsr.h"
+
 #include <glm/glm.hpp>
 #include <iostream>
 #include <fstream>
 #include <algorithm>
 #include <future>
 #include <thread>
+#include <atomic>
 
 
 // needs to be even
@@ -22,7 +24,6 @@ struct vertex;
 class Mesh;
 class Marker;
 class Camera;
-class Object;
 struct uniform_data;
 struct geom_shader_lines_device;
 
@@ -47,6 +48,10 @@ struct pvUnit {
 		res.Pos = Pos * f;
 		res.Vel = Vel * f;
 		return res;
+	}
+	void operator=(pvUnit obj) {
+		Pos = obj.Pos;
+		Vel = obj.Vel;
 	}
 	bool operator==(pvUnit obj) {
 		if (Pos != obj.Pos)
@@ -96,7 +101,6 @@ public:
 
 	ArtSat& operator^(const ArtSat& other) { 
 		// operator for making independent copies of an art sat
-		delete sat;
 		delete state;
 		delete stateButChanged;
 		delete apoapsis;
@@ -105,15 +109,11 @@ public:
 		delete prevPV;
 		delete mk1;
 		delete mk2;
-		geom_shader_lines_device_t dummy = pathDevice;
-		VAO dumber = VAOu;
+		geom_shdr_lines_term_device((void**)&pathDevice);
 
 		*this = other;
 		
-		pathDevice = dummy;
-		VAOu = dumber;
-
-		sat = new Object(*other.sat);
+		pathDevice = geom_shdr_lines_init_device();
 		state = new pvUnit(*other.state);
 		stateButChanged = new pvUnit(*other.stateButChanged);
 		apoapsis = new poi(*other.apoapsis);
@@ -126,20 +126,22 @@ public:
 	}
 
 	const char* name = nullptr;
-	vertex_t lineBuff[LINE_BUFF_SIZE_AS];
+	pvUnit lineBuff[LINE_BUFF_SIZE_AS];
 	vertex_t relLB[LINE_BUFF_SIZE_AS];
-	geom_shader_lines_device_t pathDevice;
+	double lBTime[LINE_BUFF_SIZE_AS / 2];
+	int lineBuffSize = -1;
+	geom_shader_lines_device_t* pathDevice = nullptr;
 	int lB_size_actual = -1;
 	bool inTime = true;
-
-	Shader sp = Shader("default.vert", "default.frag");
 	
+	std::vector <pvUnit>* dynBuff = nullptr;
+	std::vector <double>* dynTimes = nullptr;
+
 	pvUnit* state = nullptr;
 	pvUnit* stateButChanged = nullptr;
 	double stateTime;
 	glm::vec3 simPos = { 0, 0, 0 };
 
-	Object* sat = nullptr;
 	int soiIdx;
 	poi* apoapsis = nullptr;
 	poi* periapsis = nullptr;
@@ -147,27 +149,26 @@ public:
 	std::vector<maneuver> maneuvers;
 	double closeApproachDist;
 
+	Marker* satVis = nullptr;
 	Marker* mk1 = nullptr;
 	Marker* mk2 = nullptr;
 
 	double lastEphTime = -1;
 
-
+	std::future<void> *sysThread = nullptr;
+	std::atomic<bool> *threadStop = nullptr;
+	bool fxnStop = false;
 	
 	pvUnit* prevPV = nullptr;
 
 	glm::vec4 lineColor = glm::vec4(0, 0, 1, 1.0f);
 	float lineWidth = 2;
 
-	glm::mat4 Model;
-	glm::mat4 lsMatrix = glm::mat4(1.0f); // light space matrix for shadows
-	VAO VAOu;
-
 	ArtSat();
 
 	int ArtSatPlan(pvUnit pv, double dt, int soiID, std::vector <Mesh*> bodies);
 
-	void ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double dt, const char name[30], const char desc[30]);
+	void ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, std::atomic<bool> &stop, double dt, const char name[30], const char desc[30]);
 
 	void ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, double mod);
 
@@ -175,13 +176,15 @@ public:
 
 	~ArtSat();
 
-	void setShader(Mesh& lightSource);
-
 	void chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt);
+
+	void fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime);
 
 	void chartApproach(std::vector<Mesh*> bodies, int targetID);
 
 	void refreshTraj(std::vector<Mesh*> bodies, double dt);
+
+	void solveManeuver(std::vector<Mesh*> bodies, char* name, pvUnit pv1, pvUnit pv2, double t1, double t2);
 
 };
 

@@ -14,9 +14,9 @@ GUI::GUI(GLFWwindow* window, GUIData guiData) {
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init();
 
-	bodyNames = new const char*[guiData.bodies.size()]; // delete this in deconstructor
+	bodyNames = new const char*[guiData.Sys->bodies.size()]; // delete this in deconstructor
 	int counter = 0;
-	for (auto& body : guiData.bodies) {
+	for (auto& body : guiData.Sys->bodies) {
 		if (!body->areRings) {
 			bodyNames[counter] = body->name;
 			counter++;
@@ -25,12 +25,13 @@ GUI::GUI(GLFWwindow* window, GUIData guiData) {
 	bodyNamesLen = counter;
 
 	counter = 0;
-	satNames = new const char* [guiData.artSatAll->size()];
-	for (auto& sat : *guiData.artSatAll) {
+	satNames = new const char* [guiData.Sys->artSats.size()];
+	for (auto& sat : guiData.Sys->artSats) {
 		satNames[counter] = sat.name;
 		counter++;
 	}
 	satNamesLen = counter;
+	
 }
 
 void GUI::guiLoopStart(GUIData guiData) {
@@ -101,43 +102,43 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 	ImGui::SeparatorText("FOCUS CONTROL");
 	if (ImGui::Button("Planet Focus")) {
-		if (guiData.camera->focusMode == false)
-			guiData.camera->focusMode = true;
+		if (guiData.Sys->camera->focusMode == false)
+			guiData.Sys->camera->focusMode = true;
 		else if (focusType == 1)
-			guiData.camera->focusMode = false;
-		guiData.camera->focusBody = 0;
+			guiData.Sys->camera->focusMode = false;
+		guiData.Sys->camera->focusBody = 0;
 		focusType = 1;
 	}
 
 	ImGui::SameLine();
 	if (ImGui::Button("Sat Focus")) {
-		if (guiData.artSatAll->size() > 0) {
-			if (guiData.camera->focusMode == false)
-				guiData.camera->focusMode = true;
+		if (guiData.Sys->artSats.size() > 0) {
+			if (guiData.Sys->camera->focusMode == false)
+				guiData.Sys->camera->focusMode = true;
 			else if (focusType == 2)
-				guiData.camera->focusMode = false;
-			guiData.camera->focusBody = -1;
+				guiData.Sys->camera->focusMode = false;
+			guiData.Sys->camera->focusBody = -1;
 			focusType = 2;
 		}
 	}
 
 
-	if (guiData.camera->focusMode && focusType == 1) {
-		if (guiData.camera->focusBody < 0)
-			guiData.camera->focusBody = 0;
-		ImGui::Combo("Body Select", &(guiData.camera->focusBody), bodyNames, bodyNamesLen);
+	if (guiData.Sys->camera->focusMode && focusType == 1) {
+		if (guiData.Sys->camera->focusBody < 0)
+			guiData.Sys->camera->focusBody = 0;
+		ImGui::Combo("Body Select", &(guiData.Sys->camera->focusBody), bodyNames, bodyNamesLen);
 	}
 
-	if (guiData.camera->focusMode && focusType == 2) {
-		if (guiData.camera->focusBody > -1)
-			guiData.camera->focusBody = -1;
+	if (guiData.Sys->camera->focusMode && focusType == 2) {
+		if (guiData.Sys->camera->focusBody > -1)
+			guiData.Sys->camera->focusBody = -1;
 
 		 // ************ isnt going to work, need way to access index without the math
 		ImGui::Combo("Sat Select", &satFocusIndex, satNames, satNamesLen);
-		guiData.camera->focusBody = -1 - satFocusIndex;
+		guiData.Sys->camera->focusBody = -1 - satFocusIndex;
 	}
 
-	if (guiData.camera->focusMode == false)
+	if (guiData.Sys->camera->focusMode == false)
 		focusType = 0;
 
 
@@ -149,12 +150,18 @@ void GUI::guiLoopADS(GUIData guiData) {
 	ImGui::SeparatorText("ART SAT CONTROL");
 
 	if (focusType == 2) {
-		ArtSat* currSat = &(*guiData.artSatAll)[-guiData.camera->focusBody - 1];
-		ArtSat* someSat = currSat;
+		ArtSat* currSat = &(guiData.Sys->artSats)[-guiData.Sys->camera->focusBody - 1];
 		
-		if (copySat != nullptr)
-			someSat = copySat;
-		if (manList == nullptr || guiData.camera->focusBody != guiData.camera->lastFocusBody || 
+		/*
+		// if sat out of scope
+		while (!currSat->inTime) {
+			guiData.Sys->camera->focusBody--;
+			currSat = &(guiData.Sys->artSats)[-guiData.Sys->camera->focusBody - 1];
+		}
+		*/
+
+		// enable maneuver list in GUI
+		if (manList == nullptr || guiData.Sys->camera->focusBody != guiData.Sys->camera->lastFocusBody ||
 			manListLen != currSat->maneuvers.size()) {
 
 			if (manList != nullptr) delete manList;
@@ -166,22 +173,25 @@ void GUI::guiLoopADS(GUIData guiData) {
 		}
 
 		// focus sat info - apo/peri, time to each, MET, orbital period, maneuver info, maneuver button, refresh button
-		ImGui::Text("Altitude: %.2f km", someSat->stat->distToSoi);
-		ImGui::Text("Apoapsis: %.2f km", someSat->stat->apoapsis);
-		ImGui::Text("\tTime To: %s", secToDay(someSat->stat->timeToApo));
-		ImGui::Text("Periapsis: %.2f km", someSat->stat->periapsis);
-		ImGui::Text("\tTime To: %s", secToDay(someSat->stat->timeToPeri));
-		ImGui::Text("MET: %s", secToDay(someSat->stat->MET));
-		ImGui::Text("Orbital Period: %s", secToDay(someSat->stat->orbitalPeriod));
+		if (currSat->stat != nullptr) {
+			ImGui::Text("Altitude: %.2f km", currSat->stat->distToSoi);
+			ImGui::Text("Apoapsis: %.2f km", currSat->stat->apoapsis);
+			ImGui::Text("\tT%s", secToDay(currSat->stat->timeToApo));
+			ImGui::Text("Periapsis: %.2f km", currSat->stat->periapsis);
+			ImGui::Text("\tT%s", secToDay(currSat->stat->timeToPeri));
+			ImGui::Text("MET %s", secToDay(currSat->stat->MET));
+			ImGui::Text("Orbital Period %s", secToDay(currSat->stat->orbitalPeriod));
+		}
+		else {
+			ImGui::Text("No data available");
+		}
 
-		// list (*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[]
-		// show stats of maneuver when selected as well as go to button
-		
 		if (ImGui::Button("Show Maneuvers")) {
 			showMan = !showMan;
 			manListCurr = 0;
 		}
 
+		// maneuver stats
 		if (showMan) {
 			ImGui::Combo("->", &manListCurr, manList, manListLen);
 			ImGui::SameLine();
@@ -189,28 +199,30 @@ void GUI::guiLoopADS(GUIData guiData) {
 				goToManTime = currSat->maneuvers[manListCurr].time;
 			}
 
-			ImGui::Text("%s", (*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[manListCurr].desc);
-			//ImGui::Text("deltaV: %.2f ", (*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[manListCurr].deltaV);
-			ImGui::Text("Burn at %s", secToDay((*guiData.artSatAll)[-guiData.camera->focusBody - 1].maneuvers[manListCurr].time));
-			// not seconds to day here, want date and time
+			ImGui::Text("%s", currSat->maneuvers[manListCurr].desc);
+			ImGui::Text("deltaV: %.2f m/s", glm::length(currSat->maneuvers[manListCurr].newState.Vel - currSat->maneuvers[manListCurr].origState.Vel) * 1000);
+			ImGui::Text("Burn in T%s", secToDay(currSat->maneuvers[manListCurr].time - *guiData.simTime));
+			
 		}
 
 		if (ImGui::Button("Refresh Orbit")) {
-			currSat->refreshTraj(guiData.bodies, *guiData.simTime);
+			currSat->refreshTraj(guiData.Sys->bodies, *guiData.simTime);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("New Maneuver")) {
-			if (newMan == true) {
-				newMan = false;
+			if (newMan == true) { // if already open, reset & close
 				delete copySat;
 				copySat = nullptr;
-				return;
+				newMan = false;
+				manDt = 0;
+				manData = { 0, 0, 0 };
 			}
-			newMan = true;
-			newManDt = *guiData.simTime + (60 * 5);
-			copySat = new ArtSat();
-			*copySat ^ *currSat;
-			
+			else {
+				newMan = true;
+				newManDt = *guiData.simTime + (60 * 5);
+				copySat = new ArtSat();
+				*copySat^* currSat;
+			}
 
 		}
 		if (newMan){ // maneuver logic
@@ -243,16 +255,38 @@ void GUI::guiLoopADS(GUIData guiData) {
 			arrowToggle(manData[2], false);
 			if (manData[2] < 0) manData[2] += 2 * glm::pi<float>();
 
-			// maneuver step can take .7 seconds, delete & new can take .001 seconds, everything else very quick
 			// if maneuver changed do new calculation
 			if (oldManDt != manDt || oldManData != manData) {
+				// handle thread atomic bool
+				manStopBool.store(true);
+				manStopBool.store(false);
+
+				while (guiData.Sys->maneuverThread.valid()) { // make sure thread is dead
+					if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+						guiData.Sys->maneuverThread.get();
+					}
+				}
+
 				delete copySat;
 				copySat = new ArtSat();
-				*copySat ^ *currSat;
-				copySat->ArtSatManeuver(manData, guiData.bodies, newManDt + manDt, str0, str1);
+				*copySat^* currSat;
+
+				// solve new maneuver
+				copySat->ArtSatManeuver(manData, guiData.Sys->bodies, manStopBool, newManDt + manDt, str0, str1);
+			}
+			if (guiData.Sys->maneuverThread.valid()) {
+				// fill up temp buffer for early render
+				if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+					copySat->fillBuff(copySat->dynBuff, copySat->dynTimes);
+				}
+				else {
+					// or if done processing empty thread
+					guiData.Sys->maneuverThread.get();
+					copySat->threadStop = nullptr;
+				}
 			}
 			// render and update ( add modifier to change orbit color, fade, + update and render actual sat at same time )
-			copySat->ArtSatUpdState(guiData.bodies, *guiData.simTime, *guiData.tW, 1); // right time????
+			copySat->ArtSatUpdState(guiData.Sys->bodies, *guiData.simTime, *guiData.tW, 1); // right time????
 
 			oldManDt = manDt;
 			oldManData = manData;
@@ -262,6 +296,8 @@ void GUI::guiLoopADS(GUIData guiData) {
 					(copySat->maneuvers[copySat->maneuvers.size() - 1].newState), newManDt + manDt, str0, str1});
 				delete copySat;
 				copySat = nullptr;
+				manDt = 0;
+				manData = { 0, 0, 0 };
 				newMan = false;
 			}
 		}
@@ -277,6 +313,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 		newArtSat = true;
 		sat = new ArtSat();
 		pv = new pvUnit;
+		sat->sysThread = &guiData.Sys->maneuverThread;
 	}
 	if (newArtSat) { // new satellite logic
 
@@ -315,7 +352,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 		if (initVel[2] < 0) initVel[2] += 2 * glm::pi<float>();
 
 		// init pv
-		glm::vec3 cartDummy = sphToCart(initPos + glm::vec3{guiData.bodies[3]->realRadius, 0, 0});
+		glm::vec3 cartDummy = sphToCart(initPos + glm::vec3{guiData.Sys->bodies[3]->realRadius, 0, 0});
 		pv->Pos = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y};
 
 		glm::vec3 relToPos = { 0, initPos[1] - glm::pi<float>() / 2, initPos[2] };
@@ -323,18 +360,18 @@ void GUI::guiLoopADS(GUIData guiData) {
 		pv->Vel = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y };
 
 		// process pv
-		sat->ArtSatPlan(*pv, *(guiData.simTime), 3, guiData.bodies);
-		sat->ArtSatUpdState(guiData.bodies, *guiData.simTime, *guiData.tW, -1);
+		sat->ArtSatPlan(*pv, *(guiData.simTime), 3, guiData.Sys->bodies);
+		sat->ArtSatUpdState(guiData.Sys->bodies, *guiData.simTime, *guiData.tW, -1);
 
 		// reset art sat parameters to default values in each, delete pvUnit as well
 		if (ImGui::Button("Save")) {
 			bool repeatName = false;
-			for (auto& someSat : *guiData.artSatAll) {
+			for (auto& someSat : guiData.Sys->artSats) {
 				if (someSat.name == str0) repeatName = true;
 			}
 			if (!repeatName) {
 				sat->name = str0;
-				guiData.artSatAll->push_back(*sat);
+				guiData.Sys->artSats.push_back(*sat);
 				sat = nullptr;
 				pv = nullptr;
 				newArtSat = false;
@@ -342,8 +379,8 @@ void GUI::guiLoopADS(GUIData guiData) {
 				// change sat focus list 
 				delete satNames;
 				int counter = 0;
-				satNames = new const char* [guiData.artSatAll->size()];
-				for (auto& someSat : *guiData.artSatAll) {
+				satNames = new const char* [guiData.Sys->artSats.size()];
+				for (auto& someSat : guiData.Sys->artSats) {
 					satNames[counter] = someSat.name;
 					counter++;
 				}
@@ -358,8 +395,10 @@ void GUI::guiLoopADS(GUIData guiData) {
 		if (ImGui::Button("Discard")) {
 			sat->~ArtSat();
 			newArtSat = false;
+			sat = nullptr;
+			pv = nullptr;
 		}
-		if (ImGui::Button("Print Orbit")) {
+		if (ImGui::Button("Print Orbit") && pv != nullptr) {
 			std::cout << pv->Pos.x << " " << pv->Pos.y << " " << pv->Pos.z << '\n' << pv->Vel.x << " " << pv->Vel.y << " " << pv->Vel.z << '\n';
 		}
 	}
@@ -372,10 +411,10 @@ void GUI::guiLoopEnd(GUIData guiData) {
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	if (newArtSat) {
-		sat->ArtSatRender(guiData.camera, *(guiData.bodies[0]));
+		sat->ArtSatRender(guiData.Sys->camera, *(guiData.Sys->bodies[0]));
 	}
 	if (newMan) {
-		copySat->ArtSatRender(guiData.camera, *(guiData.bodies[0]));
+		copySat->ArtSatRender(guiData.Sys->camera, *(guiData.Sys->bodies[0]));
 	}
 }
 
@@ -401,7 +440,13 @@ void arrowToggle(float& value, bool isInt) {
 	ImGui::PopItemFlag();
 }
 
+// configured for T -/+ display
 char* secToDay(double dt) {
+	bool neg = false;
+	if (dt < 0) {
+		dt = -dt;
+		neg = true;
+	}
 
 	int min = 60;
 	int hour = 60;
@@ -424,6 +469,11 @@ char* secToDay(double dt) {
 		numMin++;
 	}
 	static char res[30];
-	sprintf(res, "%dd, %dh, %dm, %ds", numDay, numHour, numMin, (int)dt);
+
+	if (neg)
+		sprintf(res, "+ %dd, %dh, %dm, %ds", numDay, numHour, numMin, (int)dt);
+	else
+		sprintf(res, "- %dd, %dh, %dm, %ds", numDay, numHour, numMin, (int)dt);
+	
 	return res;
 }

@@ -16,7 +16,7 @@ public:
 	GLuint shaderProgram;
 
 	glm::vec3 fixedPos;
-	glm::vec3 simPos;
+	glm::vec3 corrPos;
 	glm::vec2 screenPos;
 
 	GLuint VAO, VBO;

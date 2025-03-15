@@ -6,12 +6,17 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <vector>
+#include <future>
+#include <iostream>
 #include "System.h"
+
 
 class Mesh; // "foward declaration" solved issues with the struct not recognizing
 class Camera;
+class System;
 class ArtSat;
 struct pvUnit;
+
 
 struct GUIData {
 	char* time;
@@ -19,11 +24,7 @@ struct GUIData {
 	int* tW;
 	double* simTime;
 
-	std::vector <Mesh*> bodies;
-
-	Camera* camera;
-
-	std::vector<ArtSat> *artSatAll;
+	System* Sys;
 };
 
 
@@ -39,8 +40,8 @@ public:
 	int focusType = 0; // locally designates difference between planet and sat focus
 	int satFocusIndex = 0;
 
-	ArtSat* sat;
-	pvUnit* pv;
+	ArtSat* sat = nullptr;
+	pvUnit* pv = nullptr;
 
 	bool newArtSat = false;
 	bool newMan = false;
@@ -58,6 +59,8 @@ public:
 
 	glm::vec3 manData = { 0, 0, 0 };
 	glm::vec3 oldManData = manData;
+
+	std::atomic<bool> manStopBool = false;
 	
 	float newManDt = 0;
 	float oldManDt = 0;

@@ -44,40 +44,45 @@ Marker::Marker(int type, float size, glm::vec3 fixedPos, glm::vec3 corr) {
     glDeleteShader(fragmentShader);
 
     Marker::fixedPos = fixedPos;
-    Marker::simPos = fixedPos + corr;
+    Marker::corrPos = corr;
 
 
 }
 
 void Marker::MarkerRender(Camera* camera) {
 
-    
-    if (marker_type == 1) {
-        // do something
 
-    }
+    Marker::screenPos = simToScreen(fixedPos + corrPos, camera->view, camera->proj, camera->width, camera->height);
 
-    Marker::screenPos = simToScreen(simPos, camera->view, camera->proj, camera->width, camera->height);
-
-    float ndcTriangleSize = 0.03f; // adjust based on screen size
+    float ndcTriangleSize = 0.03f;// *camera->height* camera->width / 1440000; // adjust based on screen size
 
     // define triangle directly in NDC space
     glm::vec2 ndcP1 = screenPos + glm::vec2(0, 0);      // Top
     glm::vec2 ndcP2 = screenPos + glm::vec2(-ndcTriangleSize / 2, ndcTriangleSize * 3 / 5); // Left
     glm::vec2 ndcP3 = screenPos + glm::vec2(ndcTriangleSize / 2, ndcTriangleSize * 3/ 5);  // Right
 
+
+
+    if (marker_type == 1) {
+        ndcP1 = screenPos + glm::vec2(0, ndcTriangleSize * sqrt(3) / 3);      // Top
+        ndcP2 = screenPos + glm::vec2(-ndcTriangleSize / 2, -ndcTriangleSize * sqrt(3) / 6); // Left
+        ndcP3 = screenPos + glm::vec2(ndcTriangleSize / 2, -ndcTriangleSize * sqrt(3) / 6);  // Right
+
+        color = glm::vec4(0.24f, 0.28f, 0.45f, 1.0f);
+    }
+
     float vertices[] = {
-        ndcP1.x, ndcP1.y,
-        color.x, color.y,
-        color.z, color.w,
-        
-        ndcP2.x, ndcP2.y,
-        color.x, color.y,
-        color.z, color.w,
-        
-        ndcP3.x, ndcP3.y,
-        color.x, color.y,
-        color.z, color.w
+    ndcP1.x, ndcP1.y,
+    color.x, color.y,
+    color.z, color.w,
+
+    ndcP2.x, ndcP2.y,
+    color.x, color.y,
+    color.z, color.w,
+
+    ndcP3.x, ndcP3.y,
+    color.x, color.y,
+    color.z, color.w
     };
 
 

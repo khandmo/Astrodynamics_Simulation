@@ -3,6 +3,9 @@
 #define MESH_CLASS_H
 
 #include <string>
+#include <thread>
+#include <mutex>
+
 #include "VAO.h"
 #include "EBO.h"
 #include "Camera.h"
@@ -14,7 +17,7 @@
 
 #define UTC2J2000	946684800
 #define LARGEST_DISTANCE 4550000000
-#define LENGTH_SCALE (float)6100 / LARGEST_DISTANCE
+#define LENGTH_SCALE ((float)6100 / LARGEST_DISTANCE)
 #define MAX_VERTS 3 * 12 * 1024 * 1024
 #define LINE_BUFF_SIZE_U 99 // SHOULD ALWAYS BE ODD for "refinedList" logic
 #define LINE_BUFF_SIZE (LINE_BUFF_SIZE_U * 2)
@@ -34,9 +37,223 @@ double distanceFind(glm::vec3 state1, SpiceDouble* state2);
 double distanceFind(glm::vec3 state1, glm::vec3 state2);
 void stateChange(SpiceDouble* state); // changes SpiceDoubule state[0-2] data from real life to simulation environment
 void stateChange(glm::dvec3* pos, glm::dvec3* vel);
+void invStateChange(glm::dvec3* pos, glm::dvec3* vel);
 
 class Mesh {
 public:
+
+	/*
+	// copy constructor
+	Mesh(const Mesh& other) { 
+		*this = other;
+		if (pathDevice != nullptr) {
+			this->pathDevice = geom_shdr_lines_init_device();
+		}
+	}
+
+	// move constructor
+	Mesh(Mesh&& other) noexcept { 
+		*this = other;
+		other.pathDevice = nullptr;
+	}
+
+	// copy assignment
+	Mesh& operator=(const Mesh& other){ 
+		if (this != &other) {
+			if (pathDevice != nullptr) {
+				geom_shdr_lines_term_device((void**)&other.pathDevice);
+				this->pathDevice = geom_shdr_lines_init_device();
+			}
+
+			delete[] name;
+
+			if (other.name) {
+				name = new char[strlen(other.name) + 1];
+				strcpy(const_cast<char*>(name), other.name);
+			}
+			else {
+				name = nullptr;
+			}
+			
+			delete Pos;
+			delete oPos;
+			delete refinedList;
+
+			if (other.Pos) Pos = new glm::vec3(*other.Pos);
+			else Pos = nullptr;
+
+			if (other.oPos) oPos = new glm::vec3(*other.oPos);
+			else oPos = nullptr;
+
+			if (other.refinedList) {
+				refinedList = new vertex_t[other.refinedListSize];
+				for (int i = 0; i < other.refinedListSize; i++) {
+					refinedList[i] = other.refinedList[i];
+				}
+			}
+			else {
+				refinedList = nullptr;
+			}
+
+			vertices = other.vertices;
+			indices = other.indices;
+			textures = other.textures;
+
+			depthMap = other.depthMap;
+			VAO = other.VAO;
+
+			gravSource = other.gravSource;
+			soiID = other.soiID;
+			spiceID = other.spiceID;
+			baryID = other.baryID;
+			orbitalPeriod = other.orbitalPeriod;
+			isLightSource = other.isLightSource;
+			areRings = other.areRings;
+			isMoon = other.isMoon;
+			Color = other.Color;
+			Model = other.Model;
+
+			spiceMtx = other.spiceMtx;
+
+			lsMatrix = other.lsMatrix;
+
+			mass = other.mass;
+			radius = other.radius;
+			realRadius = other.realRadius;
+			escapeVel = other.escapeVel;
+			radRot = other.radRot;
+			currAngleRad = other.currAngleRad;
+			axisTiltDegree = other.axisTiltDegree;
+			Up = other.Up;
+
+			for (int i = 0; i < sizeof(lineBuffer) / sizeof(vertex_t); i++) {
+				lineBuffer[i] = other.lineBuffer[i];
+			}
+			lineBufferSize = other.lineBufferSize;
+			lineColor = other.lineColor;
+			lineWidth = other.lineWidth;
+			lBVertDt = other.lBVertDt;
+
+			refListDt = other.refListDt;
+			refListStartIdx = other.refListStartIdx;
+			bIdx = other.bIdx;
+			rIdx = other.rIdx;
+			refNodeMarkerTime = other.refNodeMarkerTime;
+			lBNodeMarkerTime = other.lBNodeMarkerTime;
+			bt = other.bt;
+			rt = other.rt;
+			refinedRadius = other.refinedRadius;
+			refinedListSize = other.refinedListSize;
+			flipper = other.flipper;
+			refVertsSum = other.refVertsSum;
+			lastItTime = other.lastItTime;
+			lastTWIndex = other.lastTWIndex;
+			sign = other.sign;
+		}
+		return *this;
+	}
+
+	// move assignment
+	Mesh& operator=(Mesh&& other) noexcept {
+		if (this != &other) {
+
+			delete[] name;
+
+			if (other.name) {
+				name = new char[strlen(other.name) + 1];
+				strcpy(const_cast<char*>(name), other.name);
+			}
+			else {
+				name = nullptr;
+			}
+
+			delete Pos;
+			delete oPos;
+			delete refinedList;
+
+			Pos = other.Pos;
+			oPos = other.oPos;
+			refinedList = other.refinedList;
+
+			other.Pos = nullptr;
+			other.oPos = nullptr;
+			other.refinedList = nullptr;
+
+			vertices = std::move(other.vertices);
+			indices = std::move(other.indices);
+			textures = std::move(other.textures);
+
+			depthMap = other.depthMap;
+			other.depthMap = 0;
+
+			VAO = (other.VAO);
+			other.VAO.ID = 0;
+
+			gravSource = other.gravSource;
+			soiID = other.soiID;
+			spiceID = other.spiceID;
+			baryID = other.baryID;
+			orbitalPeriod = other.orbitalPeriod;
+			isLightSource = other.isLightSource;
+			areRings = other.areRings;
+			isMoon = other.isMoon;
+			Color = std::move(other.Color);
+			Model = std::move(other.Model);
+
+			ShaderProgram = other.ShaderProgram;
+			shadowShaderProgram = other.shadowShaderProgram;
+			other.ShaderProgram.Delete();
+			other.shadowShaderProgram.Delete();
+
+			spiceMtx = other.spiceMtx;
+
+			lsMatrix = std::move(other.lsMatrix);
+
+			mass = other.mass;
+			radius = other.radius;
+			realRadius = other.realRadius;
+			escapeVel = other.escapeVel;
+			radRot = other.radRot;
+			currAngleRad = other.currAngleRad;
+			axisTiltDegree = other.axisTiltDegree;
+			Up = std::move(other.Up);
+
+			pathDevice = other.pathDevice;
+			other.pathDevice = nullptr;
+
+			for (int i = 0; i < sizeof(lineBuffer); i++) {
+				lineBuffer[i] = other.lineBuffer[i];
+			}
+			lineBufferSize = other.lineBufferSize;
+			lineColor = other.lineColor;
+			lineWidth = other.lineWidth;
+			lBVertDt = other.lBVertDt;
+
+			refListDt = other.refListDt;
+			refListStartIdx = other.refListStartIdx;
+			bIdx = other.bIdx;
+			rIdx = other.rIdx;
+			refNodeMarkerTime = other.refNodeMarkerTime;
+			lBNodeMarkerTime = other.lBNodeMarkerTime;
+			bt = other.bt;
+			rt = other.rt;
+			refinedRadius = other.refinedRadius;
+			refinedListSize = other.refinedListSize;
+			flipper = other.flipper;
+			refVertsSum = other.refVertsSum;
+			lastItTime = other.lastItTime;
+			lastTWIndex = other.lastTWIndex;
+			sign = other.sign;
+
+			other.gravSource = nullptr;
+			other.soiID = nullptr;
+			other.spiceMtx = nullptr;
+
+		}
+		return *this;
+	}
+	*/
+
 	const char* name = nullptr;
 	std::vector <Vertex> vertices;
 	std::vector <GLuint> indices;
@@ -56,7 +273,7 @@ public:
 	glm::vec3* oPos = nullptr; // holder for moon relative pos
 	glm::mat4 Model;
 
-	geom_shader_lines_device_t pathDevice;
+	geom_shader_lines_device_t* pathDevice = nullptr;
 	vertex_t lineBuffer[(LINE_BUFF_SIZE)]; // if i hold pointers to the vertices maybe i can have more rendered
 	int lineBufferSize = LINE_BUFF_SIZE;
 	glm::vec4 lineColor = glm::vec4(1, 0, 0, 0.5f);
@@ -75,6 +292,7 @@ public:
 	double lastItTime = NULL;
 	int lastTWIndex = -1;
 
+	std::mutex* spiceMtx;
 
 	bool sign = false; // if rings, checks to see if sun has crossed ring plane
 
@@ -82,11 +300,6 @@ public:
 	float radius; // radius in sim units
 	float realRadius;
 	float escapeVel;
-
-	GLfloat h = 0; // specific angular momentum 
-	GLfloat redMass = 0;
-	float ecc = 0;
-	float epsilon = 0;
 
 	float radRot = 0;
 	GLfloat currAngleRad = 0;
@@ -133,7 +346,8 @@ public:
 
 	// update model position and orientation
 	void updateModel(Mesh& source);
-
+	
+	//~Mesh();
 	// return functions to call for attributes below
 
 	// returns NASA (km) position/velocity wrt Solar System barycenter at a given time

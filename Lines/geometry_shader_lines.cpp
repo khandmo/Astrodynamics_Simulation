@@ -5,10 +5,10 @@
 
 
 
-geom_shader_lines_device_t
+geom_shader_lines_device_t*
 geom_shdr_lines_init_device( void )
 {
-  geom_shader_lines_device_t device = *(geom_shader_lines_device_t * )malloc( sizeof(geom_shader_lines_device_t ) );
+  geom_shader_lines_device_t* device = (geom_shader_lines_device_t * )malloc( sizeof(geom_shader_lines_device_t ) );
 
   std::string vertexCode = get_file_contents("geoLine.vert");
   std::string fragmentCode = get_file_contents("geoLine.frag");
@@ -35,34 +35,34 @@ geom_shdr_lines_init_device( void )
   glCompileShader( geometry_shader );
   gl_utils_assert_shader_compiled( geometry_shader, "GEOMETRY_SHADER" );
 
-  device.program_id = glCreateProgram();
-  glAttachShader( device.program_id, vertex_shader );
-  glAttachShader( device.program_id, geometry_shader );
-  glAttachShader( device.program_id, fragment_shader );
-  glLinkProgram( device.program_id );
-  gl_utils_assert_program_linked( device.program_id );
+  device->program_id = glCreateProgram();
+  glAttachShader( device->program_id, vertex_shader );
+  glAttachShader( device->program_id, geometry_shader );
+  glAttachShader( device->program_id, fragment_shader );
+  glLinkProgram( device->program_id );
+  gl_utils_assert_program_linked( device->program_id );
   
-  glDetachShader( device.program_id, vertex_shader );
-  glDetachShader( device.program_id, geometry_shader );
-  glDetachShader( device.program_id, fragment_shader );
+  glDetachShader( device->program_id, vertex_shader );
+  glDetachShader( device->program_id, geometry_shader );
+  glDetachShader( device->program_id, fragment_shader );
   glDeleteShader( vertex_shader );
   glDeleteShader( geometry_shader );
   glDeleteShader( fragment_shader );
 
-  device.attribs.pos_width = glGetAttribLocation( device.program_id, "pos_width" ); // linked to index 0
-  device.attribs.col = glGetAttribLocation( device.program_id, "col" ); // linked to index 1
+  device->attribs.pos_width = glGetAttribLocation( device->program_id, "pos_width" ); // linked to index 0
+  device->attribs.col = glGetAttribLocation( device->program_id, "col" ); // linked to index 1
 
-  device.uniforms.mvp = glGetUniformLocation( device.program_id, "u_mvp" ); // linked to index 1
-  device.uniforms.viewport_size = glGetUniformLocation( device.program_id, "u_viewport_size" ); // linked to index 2
-  device.uniforms.aa_radius = glGetUniformLocation(device.program_id, "u_aa_radius"); // linked to index 0
+  device->uniforms.mvp = glGetUniformLocation( device->program_id, "u_mvp" ); // linked to index 1
+  device->uniforms.viewport_size = glGetUniformLocation( device->program_id, "u_viewport_size" ); // linked to index 2
+  device->uniforms.aa_radius = glGetUniformLocation(device->program_id, "u_aa_radius"); // linked to index 0
 
 
   // Generate VAO & VBO
-  glGenVertexArrays(1, &device.vao);
-  glGenBuffers(1, &device.vbo);
+  glGenVertexArrays(1, &device->vao);
+  glGenBuffers(1, &device->vbo);
   // Bind them
-  glBindVertexArray(device.vao);
-  glBindBuffer(GL_ARRAY_BUFFER, device.vbo);
+  glBindVertexArray(device->vao);
+  glBindBuffer(GL_ARRAY_BUFFER, device->vbo);
   // Uses buffer bound to target (GL_ARRAY_BUFFER) as data store
   glBufferData(GL_ARRAY_BUFFER, MAX_VERTS * sizeof(vertex_t), NULL, GL_DYNAMIC_DRAW);
   // How to update buffer dynamically? Call the above?
