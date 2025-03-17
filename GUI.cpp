@@ -152,14 +152,6 @@ void GUI::guiLoopADS(GUIData guiData) {
 	if (focusType == 2) {
 		ArtSat* currSat = &(guiData.Sys->artSats)[-guiData.Sys->camera->focusBody - 1];
 		
-		/*
-		// if sat out of scope
-		while (!currSat->inTime) {
-			guiData.Sys->camera->focusBody--;
-			currSat = &(guiData.Sys->artSats)[-guiData.Sys->camera->focusBody - 1];
-		}
-		*/
-
 		// enable maneuver list in GUI
 		if (manList == nullptr || guiData.Sys->camera->focusBody != guiData.Sys->camera->lastFocusBody ||
 			manListLen != currSat->maneuvers.size()) {
@@ -205,11 +197,11 @@ void GUI::guiLoopADS(GUIData guiData) {
 			
 		}
 
-		if (ImGui::Button("Refresh Orbit")) {
+		if (ImGui::Button("Refresh Orbit") && currSat->inTime) {
 			currSat->refreshTraj(guiData.Sys->bodies, *guiData.simTime);
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("New Maneuver")) {
+		if (ImGui::Button("New Maneuver") && currSat->inTime) {
 			if (newMan == true) { // if already open, reset & close
 				delete copySat;
 				copySat = nullptr;
@@ -220,8 +212,8 @@ void GUI::guiLoopADS(GUIData guiData) {
 			else {
 				newMan = true;
 				newManDt = *guiData.simTime + (60 * 5);
-				copySat = new ArtSat();
-				*copySat^* currSat;
+				copySat = new ArtSat(*currSat);
+				copySat->isCopy = true;
 			}
 
 		}
@@ -268,8 +260,8 @@ void GUI::guiLoopADS(GUIData guiData) {
 				}
 
 				delete copySat;
-				copySat = new ArtSat();
-				*copySat^* currSat;
+				copySat = new ArtSat(*currSat);
+				copySat->isCopy = true;
 
 				// solve new maneuver
 				copySat->ArtSatManeuver(manData, guiData.Sys->bodies, manStopBool, newManDt + manDt, str0, str1);
@@ -442,6 +434,12 @@ void arrowToggle(float& value, bool isInt) {
 
 // configured for T -/+ display
 char* secToDay(double dt) {
+	// catch erroneous dt's
+	if (abs(dt) > INT_MAX) {
+		char res[10] = "N/A";
+		return res;
+	}
+	
 	bool neg = false;
 	if (dt < 0) {
 		dt = -dt;

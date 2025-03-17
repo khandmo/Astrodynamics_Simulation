@@ -481,13 +481,19 @@ pvUnit Mesh::getPV(double time, bool stateChanged, bool rotated) { // *** add bo
 
 	
 	if (stateChanged) stateChange(state);
-	if (!stateChanged && rotated) {
-		glm::vec3 vec = glm::vec3(state[0], state[1], state[2]);
-		vec = glm::rotateX(vec, glm::radians(-23.4f));
-		state[0] = vec[0]; state[1] = vec[1]; state[2] = vec[2];
-		vec = glm::vec3(state[3], state[4], state[5]);
-		vec = glm::rotateX(vec, glm::radians(-23.4f));
-		state[3] = vec[0]; state[4] = vec[1]; state[5] = vec[2];
+	if (!stateChanged) {
+		double dummy = state[0];
+		//state[0] = state[1]; state[1] = state[2]; state[2] = dummy;
+		dummy = state[3];
+		//state[3] = state[4]; state[4] = state[5]; state[5] = dummy;
+		if (rotated) {
+			glm::vec3 vec = glm::vec3(state[0], state[1], state[2]);
+			vec = glm::rotateX(vec, glm::radians(-23.4f));
+			state[0] = vec[0]; state[1] = vec[1]; state[2] = vec[2];
+			vec = glm::vec3(state[3], state[4], state[5]);
+			vec = glm::rotateX(vec, glm::radians(-23.4f));
+			state[3] = vec[0]; state[4] = vec[1]; state[5] = vec[2];
+		}
 	}
 	return pvUnit{ glm::vec3{state[0], state[1], state[2]}, glm::vec3{state[3], state[4], state[5]} };
 }
@@ -502,7 +508,6 @@ void Mesh::updateModel(Mesh& source) {
 	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::vec3(1.0f, 0.0f, 0.0f));
 	Model = glm::rotate(Model, currAngleRad, Up);
 }
-
 
 double distanceFind(std::vector<double> pt1, std::vector<double> pt2) {
 	double x2 = pt1[0] - pt2[0];
@@ -547,24 +552,28 @@ void stateChange(SpiceDouble* state) {
 	state[3] = posVec.y; state[4] = posVec.z; state[5] = posVec.x;
 }
 
-void stateChange(glm::dvec3* pos, glm::dvec3* vel) {
+// no rotate
+void stateChange(glm::dvec3* pos, glm::dvec3* vel) { 
 	for (int i = 0; i < 3; i++) {
 		(*pos)[i] = (*pos)[i] * LENGTH_SCALE;
 		(*vel)[i] = (*vel)[i] * LENGTH_SCALE;
 	}
-	glm::dmat4 rotationMatrix = glm::rotate(glm::dmat4(1.0), -23.4, glm::dvec3(1.0, 0, 0));
-	*pos = rotationMatrix * glm::dvec4(*pos, 1.0);
-	*vel = rotationMatrix * glm::dvec4(*vel, 1.0);
+	double dummy = (*pos)[0];
+	(*pos)[0] = (*pos)[1]; (*pos)[1] = (*pos)[2]; (*pos)[2] = dummy;
+	dummy = (*vel)[0];
+	(*vel)[0] = (*vel)[1]; (*vel)[1] = (*vel)[2]; (*vel)[2] = dummy;
 }
 
+// no rotate
 void invStateChange(glm::dvec3* pos, glm::dvec3* vel) {
 	for (int i = 0; i < 3; i++) {
 		(*pos)[i] = (*pos)[i] / LENGTH_SCALE;
 		(*vel)[i] = (*vel)[i] / LENGTH_SCALE;
 	}
-	glm::dmat4 rotationMatrix = glm::rotate(glm::dmat4(1.0), 23.4, glm::dvec3(1.0, 0, 0));
-	*pos = rotationMatrix * glm::dvec4(*pos, 1.0);
-	*vel = rotationMatrix * glm::dvec4(*vel, 1.0);
+	double dummy = (*pos)[2];
+	(*pos)[2] = (*pos)[1]; (*pos)[1] = (*pos)[0];  (*pos)[0] = dummy;
+	dummy = (*vel)[2];
+	(*vel)[2] = (*vel)[1]; (*vel)[1] = (*vel)[0]; (*vel)[0] = dummy;
 }
 
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {

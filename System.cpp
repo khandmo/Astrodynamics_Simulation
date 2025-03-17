@@ -41,7 +41,7 @@ System::System() {
 
 	// init art sats
 	// program to take artSats and name of ephemeris data, process and add mission + maneuver to persistent memory
-	initPersistSats("persistent_sats.txt");
+	//initPersistSats("persistent_sats.txt");
 	initSat("Artemis 1", "horizons_results_raw.txt", "persistent_sats.txt");
 
 	// time memory save

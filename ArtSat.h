@@ -99,19 +99,28 @@ struct maneuver {
 class ArtSat {
 public:
 
-	ArtSat& operator^(const ArtSat& other) { 
+	ArtSat(const ArtSat& other) { 
 		// operator for making independent copies of an art sat
-		delete state;
-		delete stateButChanged;
-		delete apoapsis;
-		delete periapsis;
-		delete stat;
-		delete prevPV;
-		delete mk1;
-		delete mk2;
-		geom_shdr_lines_term_device((void**)&pathDevice);
-
-		*this = other;
+		name = new char(strlen(other.name) + 1);
+		name = other.name;
+		for (int i = 0; i < LINE_BUFF_SIZE_AS; i++) {
+			lineBuff[i] = other.lineBuff[i];
+			relLB[i] = other.relLB[i];
+			if (i < (LINE_BUFF_SIZE_AS / 2))
+				lBTime[i] = other.lBTime[i];
+		}
+		lineBuffSize = other.lineBuffSize;
+		lB_size_actual = other.lB_size_actual;
+		inTime = other.inTime;
+		stateTime = other.stateTime;
+		simPos = other.simPos;
+		soiIdx = other.soiIdx;
+		maneuvers = other.maneuvers;
+		closeApproachDist = other.closeApproachDist;
+		lastManIdx = other.lastManIdx;
+		lastEphTime = other.lastEphTime;
+		sysThread = other.sysThread;
+		threadStop = other.threadStop;
 		
 		pathDevice = geom_shdr_lines_init_device();
 		state = new pvUnit(*other.state);
@@ -122,7 +131,6 @@ public:
 		prevPV = new pvUnit(*other.prevPV);
 		mk1 = nullptr;
 		mk2 = nullptr;
-		return *this;
 	}
 
 	const char* name = nullptr;
@@ -153,11 +161,13 @@ public:
 	Marker* mk1 = nullptr;
 	Marker* mk2 = nullptr;
 
+	int lastManIdx = 0;
 	double lastEphTime = -1;
 
 	std::future<void> *sysThread = nullptr;
 	std::atomic<bool> *threadStop = nullptr;
 	bool fxnStop = false;
+	bool isCopy = false;
 	
 	pvUnit* prevPV = nullptr;
 

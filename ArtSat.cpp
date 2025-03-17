@@ -95,6 +95,9 @@ void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, std::a
 	state->Vel += deltaV; // add spherically
 	state->Vel = sphToCart(state->Vel);
 	state->Vel = { -state->Vel.x, state->Vel.z, state->Vel.y };
+	
+	*stateButChanged = *state;
+	stateChange(&stateButChanged->Pos, &stateButChanged->Vel);
 
 	char* saveName = new char[strlen(name) + 1];
 	strncpy(saveName, name, strlen(name) + 1);
@@ -122,6 +125,7 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 	// check if maneuver scheduled and execute
 	if (mod != -1) {
 		for (int i = 0; i < maneuvers.size(); i++) {
+			// if hit
 			if (maneuvers[i].time == dt) {
 
 				if (tW < 15) {
@@ -135,17 +139,28 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 				chartApproach(bodies, 4);
 				return;
 			}
+			// if blow past
+			else if (tW > 15 && dt > maneuvers[i].time && lastManIdx < i) {
+				*state = maneuvers[i].newState;
+				lastManIdx = i;
+
+				chartTraj(*state, bodies, dt);
+				chartApproach(bodies, 4);
+				return;
+			}
+			else if (tW < 15 && maneuvers[i].time > dt && lastManIdx > i) {
+				*state = maneuvers[i].origState;
+				lastManIdx = i;
+
+				chartTraj(*state, bodies, dt);
+				chartApproach(bodies, 4);
+				return;
+			}
 		}
 	}
 
 
 	if (inTime) {
-		// altitude from earth DEBUG
-		std::vector<double> distances;
-		for (int i = 0; i < maneuvers.size(); i++) {
-			distances.push_back(distanceFind(maneuvers[i].newState.Pos, bodies[3]->getPV(maneuvers[i].time, false, true).Pos));
-		}
-
 		// should refresh orbits at every turning point
 		if (mk1 == nullptr) {
 			chartApproach(bodies, 4);
@@ -155,11 +170,11 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 			mk2->corrPos = *bodies[soiIdx]->Pos;
 		}
 		if (satVis == nullptr) {
-			satVis = new Marker(1, 1, (glm::vec3)state->Pos, *(bodies[soiIdx]->Pos));
+			satVis = new Marker(1, 1, (glm::vec3)stateButChanged->Pos, *bodies[soiIdx]->Pos);
 		}
 
-		// handle state update, get close quick with orbit nodes ******** need to handle backwards maneuver travel
-		int counter = dt - stateTime, manJump = 0;
+		// handle state update, get close quick with orbit nodes
+		int counter = abs(dt - stateTime), manJump = 0;
 		double lastTime = stateTime, dummy = 0;
 		if (dt - stateTime > 60 * 100) { // arbitrary const
 			manJump = 1;
@@ -201,11 +216,12 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 			}
 			*state = maneuvers[i].newState;
 			lastTime = maneuvers[i].time;
-			counter = std::max(dt - lastTime, (double)0);
+			counter = lastTime - dt; // abs?
 		}
-		//float timeStep = 3.0f;
+		float timeStep = 1.0f;
+		if (tW < 15) timeStep = -timeStep;
 		while (counter > 0) {
-			updatePV(state, bodies, soiIdx, lastTime++, 1.0f, dummy);
+			updatePV(state, bodies, soiIdx, lastTime + timeStep, timeStep, dummy);
 			counter--;
 		}
 
@@ -215,8 +231,13 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 
 
 		ArtSat::simPos = (glm::vec3)stateButChanged->Pos + *(bodies[soiIdx]->Pos);
-		satVis->fixedPos = (glm::vec3)stateButChanged->Pos;
-		satVis->corrPos = *(bodies[soiIdx]->Pos);
+		if (!isCopy) {
+			satVis->fixedPos = (glm::vec3)stateButChanged->Pos;
+			satVis->corrPos = *(bodies[soiIdx]->Pos);
+		}
+		else { // just update corrPos
+			satVis->corrPos = *(bodies[soiIdx]->Pos);
+		}
 
 		if (manJump) {
 			// if a big jump (maneuver switch), refresh traj
@@ -228,10 +249,6 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 		stat->timeToPeri = abs(periapsis->time - (dt - stat->initTime));
 		stat->MET = dt - stat->initTime; // need start time held too
 		stat->distToSoi = vecMag(state->Pos) - bodies[soiIdx]->realRadius;
-
-		// handle model
-		//glm::mat4 objModel = glm::mat4(1.0f);
-		//Model = glm::translate(objModel, simPos);
 
 		// relativize path to soi position
 		for (int i = 0; i < LINE_BUFF_SIZE_AS; i++) {
@@ -264,7 +281,8 @@ void ArtSat::ArtSatRender(Camera* camera, Mesh lightSource) {
 			buffSize = lB_size_actual;
 		geom_shdr_lines_render(pathDevice, buffSize);
 
-		satVis->MarkerRender(camera);
+		if (satVis != nullptr)
+			satVis->MarkerRender(camera);
 		mk1->MarkerRender(camera);
 		mk2->MarkerRender(camera);
 	}
@@ -284,6 +302,7 @@ ArtSat::~ArtSat() {
 }
 
 void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
+	// thread change guard
 	while ((threadStop == nullptr || !(*threadStop)) && !fxnStop) {
 		// init vars
 		double itTime = dt;
@@ -419,51 +438,54 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 }
 
 void ArtSat::fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime) {
+	// thread change guard
+	while ((threadStop == nullptr || !(*threadStop)) && !fxnStop) {
+		if (dynBuff == nullptr)
+			return;
 
-	if (dynBuff == nullptr)
-		return;
+		// fill step lineBuff with dynLineBuff
+		float sum = dynBuff->size() / (float)((LINE_BUFF_SIZE_AS - 2) / 2);
+		int j = 1; float overflow = 0; int overflowAmt = 0;
+		bool sumUnderOne = false; bool overflowNow = false;
 
-	// fill step lineBuff with dynLineBuff
-	float sum = dynBuff->size() / (float)((LINE_BUFF_SIZE_AS - 2) / 2);
-	int j = 1; float overflow = 0; int overflowAmt = 0;
-	bool sumUnderOne = false; bool overflowNow = false;
-
-	// handle sub orbital trajectories
-	if (sum < 1) {
-		sumUnderOne = true;
-		lB_size_actual = dynBuff->size();
-	}
-	else {
-		lB_size_actual = -1;
-	}
-
-	// fill loop, divides dynLBS evenly depending on line buff size
-	for (int k = 0; k < dynBuff->size(); k++) {
-		overflowNow = false;
-		while (!sumUnderOne && ((k - overflowAmt) % (int)sum) != 0 && k < dynBuff->size()) {
-			k++;
+		// handle sub orbital trajectories
+		if (sum < 1) {
+			sumUnderOne = true;
+			lB_size_actual = dynBuff->size();
 		}
-		overflow += sum - (int)sum;
-		if (overflow > 1) {
-			k++; overflowNow = true; overflowAmt++;
-			overflow = overflow - (int)overflow;
+		else {
+			lB_size_actual = -1;
 		}
-		if (k < dynBuff->size() && (overflowNow || !sumUnderOne) && j < LINE_BUFF_SIZE_AS - 1) { // shouldnt need last check
-			lineBuff[j] = { (*dynBuff)[k] }; 
-			lineBuff[j + 1] = lineBuff[j];
-			lBTime[j / 2] = (*dynTime)[k];
-			j += 2;
+
+		// fill loop, divides dynLBS evenly depending on line buff size
+		for (int k = 0; k < dynBuff->size(); k++) {
+			overflowNow = false;
+			while (!sumUnderOne && ((k - overflowAmt) % (int)sum) != 0 && k < dynBuff->size()) {
+				k++;
+			}
+			overflow += sum - (int)sum;
+			if (overflow > 1) {
+				k++; overflowNow = true; overflowAmt++;
+				overflow = overflow - (int)overflow;
+			}
+			if (k < dynBuff->size() && (overflowNow || !sumUnderOne) && j < LINE_BUFF_SIZE_AS - 1) { // shouldnt need last check
+				lineBuff[j] = { (*dynBuff)[k] };
+				lineBuff[j + 1] = lineBuff[j];
+				lBTime[j / 2] = (*dynTime)[k];
+				j += 2;
+			}
 		}
+
+
+		lineBuff[LINE_BUFF_SIZE_AS - 1] = lineBuff[0];
+		// ensure closure only when the orbits should close
+		if (distanceFind(lineBuff[LINE_BUFF_SIZE_AS - 1].Pos, lineBuff[LINE_BUFF_SIZE_AS - 2].Pos) >
+			(2 * distanceFind(lineBuff[LINE_BUFF_SIZE_AS - 2].Pos, lineBuff[LINE_BUFF_SIZE_AS - 3].Pos))) {
+			lineBuff[LINE_BUFF_SIZE_AS - 1] = lineBuff[LINE_BUFF_SIZE_AS - 2];
+		}
+		fxnStop = true;
 	}
-
-
-	lineBuff[LINE_BUFF_SIZE_AS - 1] = lineBuff[0];
-	// ensure closure only when the orbits should close
-	if (distanceFind(lineBuff[LINE_BUFF_SIZE_AS - 1].Pos, lineBuff[LINE_BUFF_SIZE_AS - 2].Pos) >
-		(2 * distanceFind(lineBuff[LINE_BUFF_SIZE_AS - 2].Pos, lineBuff[LINE_BUFF_SIZE_AS - 3].Pos))) {
-		lineBuff[LINE_BUFF_SIZE_AS - 1] = lineBuff[LINE_BUFF_SIZE_AS - 2];
-	}
-
+	fxnStop = false;
 }
 
 void ArtSat::chartApproach(std::vector<Mesh*> bodies, int targetID) {
@@ -541,7 +563,7 @@ void ArtSat::solveManeuver(std::vector<Mesh*> bodies, char* name, pvUnit pv1, pv
 	}
 	char* saveName = new char[strlen(name) + 1];
 	strncpy(saveName, name, strlen(name) + 1);
-	maneuvers.push_back({ pvAL[i], pvBL[i],  t1 + (3 * i), saveName, "?" });
+	maneuvers.push_back({ pvAL[i], pvBL[i],  t1 + (timeStep * i), saveName, "?" });
 }
 
 
@@ -575,7 +597,7 @@ glm::dvec3 accel_comp(pvUnit pv, std::vector<Mesh*> bodies, int soiIdx, double d
 
 	pvUnit soi = bodies[soiIdx]->getPV(dt, false, true);
 	if (bodies[soiIdx]->isMoon) {
-		soi = bodies[soiIdx]->gravSource->getPV(dt, false, true) + bodies[soiIdx]->getPV(dt, false, true);
+		soi = soi + bodies[soiIdx]->gravSource->getPV(dt, false, true);
 	}
 	pvUnit pvToSun = pv + soi;
 
@@ -586,7 +608,8 @@ glm::dvec3 accel_comp(pvUnit pv, std::vector<Mesh*> bodies, int soiIdx, double d
 			pvToBody = pvToBody - bodies[i]->getPV(dt, false, true);
 		}
 		if (bodies[i]->isMoon) {
-			pvToBody = pvToSun - (bodies[i]->gravSource->getPV(dt, false, true) + bodies[i]->getPV(dt, false, true));
+			pvUnit moonAmt = bodies[i]->gravSource->getPV(dt, false, true) + bodies[i]->getPV(dt, false, true);
+			pvToBody = pvToSun - moonAmt;
 		}
 		glm::dvec3 acc = onePN(pvToBody, bodies[i]->mass);
 		str.push_back(vecMag(acc));
@@ -686,9 +709,7 @@ double totalEnergy(pvUnit pv, double M, double *KE, double *PE) {
 // update pv with 1PN approximation at specific time dt (UTC) pv units should be in km, s (NOT state changed)
 void updatePV(pvUnit* pv, std::vector<Mesh*> bodies, int soiIndex, double dt, float timeStep, double &E0) {
 
-
 	pvUnit change = leapfrog(*pv, bodies, soiIndex, dt, (double)timeStep);
-
 	*pv = *pv + change; // return to local pv
 }
 
