@@ -2,10 +2,11 @@
 
 
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state); // finds closest vertex in buffer to state
-void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int baryID,
+void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int spiceID,
 	 double* pbt, double* prt, int* pbtIdx, int* prtIdx, double* refListDt, const int lWidth, const glm::vec4 lColor); // generates refined List
 
-Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, float radius, float mass, bool isLight, bool areRings, Shader* shaderProgram, const char* soiID, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod) {
+Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, float radius, float mass, bool isLight, bool areRings,
+	Shader* shaderProgram, const char* soiID, const char* soiIdx, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod) {
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
 	Mesh::indices = indices;
@@ -13,6 +14,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	Mesh::areRings = areRings;
 	Mesh::isLightSource = isLight;
 	Mesh::soiID = soiID;
+	Mesh::soiIdx = soiIdx;
 	Mesh::spiceID = spiceIDx;
 	Mesh::baryID = baryIDx;
 	Mesh::orbitalPeriod = orbPeriod; // each body has a factual orbital period in days hard coded for initialization
@@ -20,7 +22,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	Mesh::radius = radius * LENGTH_SCALE;
 	Mesh::realRadius = radius;
 	Mesh::mass = mass * pow(10, 20);
-	if (soiID != "-1" && soiID != "0") isMoon = true;
+	if (soiID != "10") isMoon = true;
 	else isMoon = false;
 
 	
@@ -31,7 +33,13 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	}
 
 	// init position(s)
-	Pos = new glm::vec3{ 0.0f, 0.0f, 0.0f };
+	SpiceDouble state[6];
+	SpiceDouble lt;
+	double et = ((UTCtime / 86400.0) + 2440587.5); // UTC to Julian
+	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET	
+	spkezr_c(std::to_string(spiceID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
+	stateChange(state);
+	Pos = new glm::vec3{ state[0], state[1], state[2] };
 	oPos = new glm::vec3{ *Pos };
 
 	// set object model position
@@ -77,10 +85,6 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 
 	// orbital line composition scripting
 	if (baryID != 10 && !areRings) {
-		SpiceDouble state[6];
-		SpiceDouble lt;
-		double et = UTCtime - UTC2J2000; // UTC to J2000
-			
 		vertex_t dummyier{}; // holds first orbital point to connect paths at end of buffer
 
 		double tPt = 0; // current time adjusted for frame
@@ -94,7 +98,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 				lineBufferSize -= 2 * (LINE_BUFF_SIZE_U + 1 - i); // ******************************** need a way to cut out lines that bridge unfulfilled orbits
 				break;
 			}
-			spkezr_c(std::to_string(baryID).c_str(), tPt, "J2000", "NONE", soiID, state, &lt);
+			spkezr_c(std::to_string(spiceID).c_str(), tPt, "ECLIPJ2000", "NONE", soiID, state, &lt);
 			stateChange(state);
 
 			vertex_t dummy{};
@@ -116,6 +120,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 		Mesh::pathDevice = geom_shdr_lines_init_device();
 	}
 
+	
 	/*
 
 
@@ -260,10 +265,11 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	// NASA SPICE position
 	SpiceDouble state[6];
 	SpiceDouble lt;
-	double et = UTCtime - UTC2J2000; // UTC to J2000
+	double et = ((UTCtime / 86400.0) + 2440587.5); // UTC to JD
+	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
 
 	(*spiceMtx).lock();
-	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
+	spkezr_c(std::to_string(spiceID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
 	(*spiceMtx).unlock();
 
 	stateChange(state);
@@ -385,7 +391,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 				for (int i = 0; i < numRefVerts; i++) {
 
 					(*spiceMtx).lock();
-					spkezr_c(std::to_string(baryID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "J2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
+					spkezr_c(std::to_string(spiceID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "ECLIPJ2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
 					(*spiceMtx).unlock();
 
 					stateChange(stateDt);
@@ -476,25 +482,13 @@ pvUnit Mesh::getPV(double time, bool stateChanged, bool rotated) { // *** add bo
 
 	SpiceDouble state[6];
 	SpiceDouble lt;
-	double et = time - UTC2J2000;
-	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
+	double et = ((time / 86400.0) + 2440587.5);
+	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
+	spkezr_c(std::to_string(spiceID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
 
 	
 	if (stateChanged) stateChange(state);
-	if (!stateChanged) {
-		double dummy = state[0];
-		//state[0] = state[1]; state[1] = state[2]; state[2] = dummy;
-		dummy = state[3];
-		//state[3] = state[4]; state[4] = state[5]; state[5] = dummy;
-		if (rotated) {
-			glm::vec3 vec = glm::vec3(state[0], state[1], state[2]);
-			vec = glm::rotateX(vec, glm::radians(-23.4f));
-			state[0] = vec[0]; state[1] = vec[1]; state[2] = vec[2];
-			vec = glm::vec3(state[3], state[4], state[5]);
-			vec = glm::rotateX(vec, glm::radians(-23.4f));
-			state[3] = vec[0]; state[4] = vec[1]; state[5] = vec[2];
-		}
-	}
+	
 	return pvUnit{ glm::vec3{state[0], state[1], state[2]}, glm::vec3{state[3], state[4], state[5]} };
 }
 
@@ -544,11 +538,9 @@ void stateChange(SpiceDouble* state) {
 
 	// places the eccliptic horizontal and changes orientation for OpenGL
 	glm::vec3 posVec = glm::vec3(state[0], state[1], state[2]);
-	posVec = glm::rotateX(posVec, glm::radians(-23.4f));
 	state[0] = posVec.y; state[1] = posVec.z; state[2] = posVec.x;
 
 	posVec = glm::vec3(state[3], state[4], state[5]);
-	posVec = glm::rotateX(posVec, glm::radians(-23.4f));
 	state[3] = posVec.y; state[4] = posVec.z; state[5] = posVec.x;
 }
 
@@ -627,7 +619,7 @@ int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {
 	return idx;
 }
 
-void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int baryID,
+void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int spiceID,
 	 double* pbt, double* prt, int* pbtIdx, int* prtIdx, double* refListDt, const int lWidth, const glm::vec4 lColor) {
 	double bt = et - timeWidth/2;  *pbt = bt;
 	double rt = et + timeWidth/2;  *prt = rt;
@@ -638,8 +630,8 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 	SpiceDouble stateRt[6];
 	SpiceDouble stateDt[6];
 	SpiceDouble lt;
-	spkezr_c(std::to_string(baryID).c_str(), bt, "J2000", "NONE", soiID, stateBt, &lt);
-	spkezr_c(std::to_string(baryID).c_str(), rt, "J2000", "NONE", soiID, stateRt, &lt);
+	spkezr_c(std::to_string(spiceID).c_str(), bt, "ECLIPJ2000", "NONE", soiID, stateBt, &lt);
+	spkezr_c(std::to_string(spiceID).c_str(), rt, "ECLIPJ2000", "NONE", soiID, stateRt, &lt);
 	stateChange(stateBt);
 	stateChange(stateRt);
 
@@ -659,7 +651,7 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 		*pbtIdx = btIdx; *prtIdx = rtIdx;
 
 	for (int i = 0; i < REF_LIST_SIZE_U; i++) {
-		spkezr_c(std::to_string(baryID).c_str(), bt + rfDt * (i + 1), "J2000", "NONE", soiID, stateDt, &lt);
+		spkezr_c(std::to_string(spiceID).c_str(), bt + rfDt * (i + 1), "ECLIPJ2000", "NONE", soiID, stateDt, &lt);
 		stateChange(stateDt);
 		if (soiID != "0") {
 			for (int i = 0; i < 3; i++) {

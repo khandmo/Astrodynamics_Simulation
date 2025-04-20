@@ -50,21 +50,21 @@ Marker::Marker(int type, float size, glm::vec3 fixedPos, glm::vec3 corr) {
 }
 
 void Marker::MarkerRender(Camera* camera) {
-
+    float aspectRatio = camera->width / (float)camera->height;
 
     Marker::screenPos = simToScreen(fixedPos + corrPos, camera->view, camera->proj, camera->width, camera->height);
 
-    float ndcTriangleSize = 0.03f;// *camera->height* camera->width / 1440000; // adjust based on screen size
+    float ndcTriangleSize = 0.03f / aspectRatio; // adjust based on screen size
 
     // define triangle directly in NDC space
-    glm::vec2 ndcP1 = screenPos + glm::vec2(0, 0);      // Top
+    glm::vec2 ndcP1 = screenPos + glm::vec2(0, (ndcTriangleSize - 0.03f) / 2);      // Top
     glm::vec2 ndcP2 = screenPos + glm::vec2(-ndcTriangleSize / 2, ndcTriangleSize * 3 / 5); // Left
     glm::vec2 ndcP3 = screenPos + glm::vec2(ndcTriangleSize / 2, ndcTriangleSize * 3/ 5);  // Right
 
 
 
-    if (marker_type == 1) {
-        ndcP1 = screenPos + glm::vec2(0, ndcTriangleSize * sqrt(3) / 3);      // Top
+    if (marker_type == 1) { // capsule marker
+        ndcP1 = screenPos + glm::vec2(0, (ndcTriangleSize * sqrt(3) / 3) + ((0.03f * sqrt(3) / 3) - (ndcTriangleSize * sqrt(3) / 3)));  // Top
         ndcP2 = screenPos + glm::vec2(-ndcTriangleSize / 2, -ndcTriangleSize * sqrt(3) / 6); // Left
         ndcP3 = screenPos + glm::vec2(ndcTriangleSize / 2, -ndcTriangleSize * sqrt(3) / 6);  // Right
 

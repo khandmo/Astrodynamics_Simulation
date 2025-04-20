@@ -8,16 +8,17 @@ void csv2Sat(ArtSat& sat, char* buff, std::vector<Mesh*>* bodies);
 
 System::System() {
 	// init SPICE kernels
-	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
+	furnsh_c("spice_kernels/de441_part-1.bsp"); // for pos/vel of bodies (baryID)
+	furnsh_c("spice_kernels/de441_part-2.bsp");
 	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
 	// initialize radius as true radius in km divided by a factor of 6100/4550000000 to be consistent with orbital distances
-	bodiesActual.push_back(initBody("Sun", "Textures/SQmercury.jpg", 1.989f * pow(10, 10), 696340.0f, 0.0f, 0.0f, 0.0f, true, false, "0", 10, 10, 0)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
-	bodiesActual.push_back(initBody("Mercury", "Textures/SQmercury.jpg", 3.3011f * pow(10, 3), 2439.7f, 0.0f, 2, 0.0600068844f, false, false, "0", 1, 199, 88));
-	bodiesActual.push_back(initBody("Venus", "Textures/SQvenus.jpg", 4.8675f * pow(10, 4), 6051.8f, 0.0f, 3, 0.0434617764f, false, false, "0", 2, 299, 225));
-	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 5.97237f * pow(10, 4), 6371.0f, 0.0f, 23.5, 10.56121166f, false, false, "0", 3, 399, 365));
-	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 7.342f * pow(10, 2), 1737.4f, 0.0f, 1.5, 0.35800717f, false, false, "3", 301, 301, 27));
-	bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, 10.57f, false, false, "0", 4, 499, 687));
+	bodiesActual.push_back(initBody("Sun", "Textures/SQmercury.jpg", 1.989f * pow(10, 10), 696340.0f, 0.0f, 0.0f, 0.0f, true, false, "10", "0", 10, 10, 0)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
+	bodiesActual.push_back(initBody("Mercury", "Textures/SQmercury.jpg", 3.3011f * pow(10, 3), 2439.7f, 0.0f, 2, 0.0600068844f, false, false, "10", "0", 1, 199, 88));
+	bodiesActual.push_back(initBody("Venus", "Textures/SQvenus.jpg", 4.8675f * pow(10, 4), 6051.8f, 0.0f, 3, 0.0434617764f, false, false, "10", "0", 2, 299, 225));
+	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 5.97237f * pow(10, 4), 6371.0f, 0.0f, 23.5, 10.56121166f, false, false, "10", "0", 3, 399, 365));
+	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 7.342f * pow(10, 2), 1737.4f, 0.0f, 1.5, 0.35800717f, false, false, "399", "3", 301, 301, 27));
+	//bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, 10.57f, false, false, "0", 499, 4, 687));
 	//bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, 25.64f, false, false, "0", 5, 599, 4331));
 	//bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 5.6834f * pow(10, 6), 58232.0f, 0.0f, 26.73, 23.6886f, false, false, "0", 6, 699, 10759));
 	//bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", 0.0f, 75000.0f, 140000.0f, 26.73, 21.0f, false, true, "0", 6, 699, 10759));
@@ -34,15 +35,23 @@ System::System() {
 		else {
 			dullBodies.push_back(bodies[i]);
 		}
-		if (bodies[i]->soiID != "-1"){
-			bodies[i]->gravSource = &bodiesActual[std::stoi(bodies[i]->soiID)];
+		if (i != 0) {
+			bodies[i]->gravSource = &bodiesActual[std::stoi(bodies[i]->soiIdx)];
+
+			// assign soi radii
+			glm::dvec3 dPos = *bodies[i]->Pos, rPos;
+			invStateChange(&dPos, &rPos);
+			if (bodies[i]->gravSource != nullptr)
+				bodies[i]->soiRadius = glm::length(dPos) * pow((bodies[i]->mass / bodies[i]->gravSource->mass), 2.0 / 5.0);
 		}
+		else
+			bodies[0]->soiRadius = INT_MAX;
 	}
 
 	// init art sats
 	// program to take artSats and name of ephemeris data, process and add mission + maneuver to persistent memory
 	//initPersistSats("persistent_sats.txt");
-	initSat("Artemis 1", "horizons_results_raw.txt", "persistent_sats.txt");
+	//initSat("Artemis 1", "horizons_results_raw.txt", "persistent_sats.txt");
 
 	// time memory save
 	sysTime = *(time_block*) malloc(sizeof(time_block));
@@ -53,7 +62,7 @@ System::System() {
 	updateBodyState(); // shaders stable here
 }
 
-Mesh System::initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, int orbPeriod) {
+Mesh System::initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, const char* soiIdx, int baryID, int spiceID, int orbPeriod) {
 	// init texture
 	Texture tex[] = { Texture(texFilePath, "diffuse", 0, GL_RGB, GL_UNSIGNED_BYTE) };
 
@@ -75,7 +84,7 @@ Mesh System::initBody(const char* name, const char* texFilePath, float mass, flo
 	// masses are all / 10^20 for the sake of transportation
 
 	SystemTime();
-	Mesh body(name, obj.vertices, obj.indices, objTex, radius, mass, isLight, areRings, &shader, soiID, baryID, spiceID, sysTime.time_in_sec, orbPeriod); // velocity will be updated with SPICE integration
+	Mesh body(name, obj.vertices, obj.indices, objTex, radius, mass, isLight, areRings, &shader, soiID, soiIdx, baryID, spiceID, sysTime.time_in_sec, orbPeriod); // velocity will be updated with SPICE integration
 	// Set Properties	
 	body.AxialTilt(axialTilt);
 	body.radRot = angleOfRot; // assign rotation speed
@@ -237,6 +246,11 @@ void System::initPersistSats(const char* file) {
 }
 
 void System::ArtSatHandle(Camera* camera, double dt, int tW) {
+	// if time warp over certain amount, run this in thread
+	// push estimate positions to screen until time warp is brought back down and computations can complete 
+	// use nodes for estimates, refresh traj if all out of nodes
+	// can assume fit local nodes to low poly estimates to estimate position for visual purposes
+
 
 	for (int i = 0; i < artSats.size(); i++) {
 		artSats[i].ArtSatUpdState(bodies, dt, tW,  0);
@@ -270,6 +284,7 @@ void System::shaderSet() {
 }
 
 void System::orbLineHandle(glm::vec3 cameraPos) {
+	// handles distance related phasing of orbital lines
 
 	double distPlanet = INT_MAX, distMoon = INT_MAX, dist;
 	int planetIdx, moonIdx;

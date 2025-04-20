@@ -53,12 +53,17 @@ public:
 
 	
 	bool showMan = false;
+	bool targetWin = false;
+	bool retrograde = false;
+	bool fineCtrl = false;
+	
 	const char** manList = nullptr;
 	int manListLen = 0;
 	int manListCurr = 0;
 
 	glm::vec3 manData = { 0, 0, 0 };
 	glm::vec3 oldManData = manData;
+	glm::vec3 fineCtrlData = { 0, 0, 0 };
 
 	std::atomic<bool> manStopBool = false;
 	

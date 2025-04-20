@@ -65,7 +65,7 @@ public:
 	System(); // initializes main bodies, shaders / saved game?
 
 	// generates body given, shaderType toggles emission/dull shader modes, adds bodies to pertenant lists
-	Mesh initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, int orbPeriod);
+	Mesh initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, const char* soiIdx, int baryID, int spiceID, int orbPeriod);
 
 	// generates real missions based on ephemeris data
 	void initSat(const char* name, const char* eph, const char* prstnt);

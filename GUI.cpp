@@ -1,7 +1,7 @@
 #include "GUI.h"
 
 char* secToDay(double dt);
-void arrowToggle(float& value, bool isInt);
+void arrowToggle(float& value, bool isInt, bool fineCtrl);
 
 GUI::GUI(GLFWwindow* window, GUIData guiData) {
 
@@ -178,6 +178,52 @@ void GUI::guiLoopADS(GUIData guiData) {
 			ImGui::Text("No data available");
 		}
 
+		if (ImGui::Button("Target")) {
+			targetWin = !targetWin;
+		}
+
+		if (targetWin) {
+			ImGui::Begin("Target", &targetWin);
+
+			ImGui::SeparatorText("TARGET ACQ");
+
+			// dummy sat for maneuver info
+			ArtSat* someSat = currSat;
+			if (newMan)
+				someSat = copySat;
+
+			if (ImGui::Button("Toggle")) {
+				if (someSat->targStat == nullptr) {
+					someSat->targStat = new targStats;
+				}
+				else {
+					delete someSat->targStat;
+					someSat->targStat = nullptr;
+				}
+			}
+
+			if (someSat->targStat != nullptr) {
+				if (someSat->lastTargIdx != someSat->targStat->targetIdx) { // targ update check
+					someSat->lastTargIdx = someSat->targStat->targetIdx;
+				}
+				ImGui::Combo("Target Select", &someSat->targStat->targetIdx, bodyNames, bodyNamesLen);
+				
+				someSat->targStat->soiRad = guiData.Sys->bodies[someSat->targStat->targetIdx]->soiRadius;
+
+				ImGui::Text("Closest Approach: %.2f km", someSat->targStat->closeAppr);
+				ImGui::Text("\tT%s", secToDay(someSat->targStat->timeToCloseAppr));
+
+				if (someSat->targStat->soiCapture)
+					ImGui::Text("Capture in T%s", secToDay(someSat->targStat->timeToCapture));
+				else
+					ImGui::Text("Capture Miss: %.2f km", someSat->targStat->closeAppr - someSat->targStat->soiRad);
+
+				// time to optimal transfer?
+				// warp button to optimal transfer?
+			}
+			ImGui::End();
+		}
+
 		if (ImGui::Button("Show Maneuvers")) {
 			showMan = !showMan;
 			manListCurr = 0;
@@ -197,9 +243,6 @@ void GUI::guiLoopADS(GUIData guiData) {
 			
 		}
 
-		if (ImGui::Button("Refresh Orbit") && currSat->inTime) {
-			currSat->refreshTraj(guiData.Sys->bodies, *guiData.simTime);
-		}
 		ImGui::SameLine();
 		if (ImGui::Button("New Maneuver") && currSat->inTime) {
 			if (newMan == true) { // if already open, reset & close
@@ -217,35 +260,91 @@ void GUI::guiLoopADS(GUIData guiData) {
 			}
 
 		}
+		
+		if (ImGui::Button("Refresh Orbit") && currSat->inTime) {
+			currSat->refreshTraj(guiData.Sys->bodies, *guiData.simTime);
+		}
+
+
 		if (newMan){ // maneuver logic
 
+			// should not use static here
 			static char str0[30] = "maneuver 1"; // modify to tick up with amt of maneuvers
 			ImGui::InputText("Name", str0, IM_ARRAYSIZE(str0));
 
 			static char str1[30] = "";
 			ImGui::InputText("Description", str1, IM_ARRAYSIZE(str1));
 
+			ImGui::Checkbox("Fine Control", &fineCtrl);
+			ImGui::SameLine();
+			ImGui::Checkbox("Retrograde Burn", &retrograde);
+
+
+			manData[0] *= 1000; // have to move this above fineCtrl copy
+			if (fineCtrl && fineCtrlData == glm::vec3 { 0, 0, 0 }) {
+				fineCtrlData = manData;
+			}
+			else if (!fineCtrl && fineCtrlData != glm::vec3{ 0, 0, 0 }) {
+				fineCtrlData = glm::vec3{ 0, 0, 0 };
+			}
+
 			ImGui::SliderFloat("Time", &manDt, 0, currSat->stat->orbitalPeriod, "%.f s");
 			ImGui::SameLine();
-			arrowToggle(manDt, true);
+			arrowToggle(manDt, true, fineCtrl);
 			if (manDt < 0) manDt += currSat->stat->orbitalPeriod;
 
-			manData[0] *= 1000;
-			ImGui::SliderFloat("Velocity", &manData[0], 0, 8000, "%.2f m/s"); // ******** need way to burn retrograde
+
+			
+			if (fineCtrl) { // FOR ALL FINE CTRL MUST MAKE SURE MODIFIED BOUNDS ARE WITHIN PARAMETER BOUNDS
+				float lBnd = fineCtrlData[0] - 75; float uBnd = fineCtrlData[0] + 75;
+				if (lBnd < 0)
+					lBnd = 0;
+				ImGui::SliderFloat("Velocity", &manData[0], lBnd, uBnd, "%.3f m/s", ImGuiInputTextFlags_EnterReturnsTrue);
+			}
+			else 
+				ImGui::SliderFloat("Velocity", &manData[0], 0, 8000, "%.2f m/s", ImGuiInputTextFlags_EnterReturnsTrue);
 			ImGui::SameLine();
-			arrowToggle(manData[0], true);
-			if (manData[0] < 0) manData[0] += 12;
+			arrowToggle(manData[0], true, fineCtrl);
 			manData[0] /= 1000;
+	
 
-			ImGui::SliderFloat("Pitch", &manData[1], 0, glm::pi<float>(), "%.2f rad");
-			ImGui::SameLine();
-			arrowToggle(manData[1], false);
-			if (manData[1] < 0) manData[1] += glm::pi<float>();
 
-			ImGui::SliderFloat("Yaw", &manData[2], 0, 2 * glm::pi<float>(), "%.2f rad");
+
+			if (fineCtrl) {
+				float lBnd = fineCtrlData[1] - 0.2; float uBnd = fineCtrlData[1] + 0.2;
+				if (lBnd < -glm::pi<float>() / 2)
+					lBnd = -glm::pi<float>() / 2;
+				else if (uBnd > glm::pi<float>() / 2)
+					uBnd = glm::pi<float>() / 2;
+				ImGui::SliderFloat("Pitch", &manData[1], lBnd, uBnd, "%.3f rad", ImGuiInputTextFlags_EnterReturnsTrue);
+			}
+			else
+				ImGui::SliderFloat("Pitch", &manData[1], -glm::pi<float>() / 2, glm::pi<float>() / 2, "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
 			ImGui::SameLine();
-			arrowToggle(manData[2], false);
-			if (manData[2] < 0) manData[2] += 2 * glm::pi<float>();
+			arrowToggle(manData[1], false, fineCtrl);
+
+			if (manData[1] > glm::pi<float>() / 2) manData[1] -= glm::pi<float>();
+			if (manData[1] < -glm::pi<float>() / 2) manData[1] += glm::pi<float>();
+
+
+			if (fineCtrl) {
+				float lBnd = fineCtrlData[2] - 0.4; float uBnd = fineCtrlData[2] + 0.4;
+				if (lBnd < -glm::pi<float>())
+					lBnd = -glm::pi<float>();
+				else if (uBnd > glm::pi<float>())
+					uBnd = glm::pi<float>();
+				ImGui::SliderFloat("Yaw", &manData[2], lBnd, uBnd, "%.3f rad", ImGuiInputTextFlags_EnterReturnsTrue);
+			}
+			else
+				ImGui::SliderFloat("Yaw", &manData[2], -glm::pi<float>(), glm::pi<float>(), "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
+			ImGui::SameLine();
+			arrowToggle(manData[2], false, fineCtrl);
+			if (manData[2] > glm::pi<float>()) manData[2] -= 2 * glm::pi<float>();
+			if (manData[2] < -glm::pi<float>()) manData[2] += 2 * glm::pi<float>();
+
+			// handle retrograde
+			if (retrograde && manData[0] > 0)
+				manData[0] = -manData[0];
 
 			// if maneuver changed do new calculation
 			if (oldManDt != manDt || oldManData != manData) {
@@ -259,29 +358,49 @@ void GUI::guiLoopADS(GUIData guiData) {
 					}
 				}
 
+				// transplant target, remake copySat
+				targStats copyTS; copyTS.targetIdx = -1;
+				if (copySat->targStat != nullptr)
+					copyTS = *(copySat->targStat);
+
 				delete copySat;
 				copySat = new ArtSat(*currSat);
-				copySat->isCopy = true;
 
+				if (copyTS.targetIdx != -1)
+					copySat->targStat = new targStats(copyTS);
+				copySat->isCopy = true;
 				// solve new maneuver
 				copySat->ArtSatManeuver(manData, guiData.Sys->bodies, manStopBool, newManDt + manDt, str0, str1);
 			}
 			if (guiData.Sys->maneuverThread.valid()) {
 				// fill up temp buffer for early render
 				if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-					copySat->fillBuff(copySat->dynBuff, copySat->dynTimes);
+					if (!copySat->soi_ing)
+						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 0);
+					else
+						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 1);
 				}
 				else {
 					// or if done processing empty thread
 					guiData.Sys->maneuverThread.get();
+					
+					// handle target closest approach
+					if (copySat->targStat != nullptr) {
+						copySat->chartApproach(guiData.Sys->bodies, copySat->targStat->targetIdx);
+						copySat->mk1->color = copySat->lineColor;
+						copySat->mk2->color = copySat->lineColor;
+					}
 					copySat->threadStop = nullptr;
 				}
 			}
 			// render and update ( add modifier to change orbit color, fade, + update and render actual sat at same time )
-			copySat->ArtSatUpdState(guiData.Sys->bodies, *guiData.simTime, *guiData.tW, 1); // right time????
+			copySat->ArtSatUpdState(guiData.Sys->bodies, newManDt + manDt, *guiData.tW, 1); // right time????
 
 			oldManDt = manDt;
 			oldManData = manData;
+			// handle retrograde
+			if (manData[0] < 0)
+				manData[0] = -manData[0];
 			// save maneuver
 			if (ImGui::Button("Save Maneuver")) {
 				currSat->maneuvers.push_back({ (copySat->maneuvers[copySat->maneuvers.size() - 1].origState), 
@@ -313,34 +432,34 @@ void GUI::guiLoopADS(GUIData guiData) {
 		ImGui::InputText("Name", str0, IM_ARRAYSIZE(str0));
 		
 		int dummy = (int)initPos[0];
-		ImGui::SliderInt("r", &dummy, 300, 10000, "%d km"); // when r changes, vMag should change to keep the same orbital energy over some threshold
+		ImGui::SliderInt("r", &dummy, 300, 10000, "%d km", ImGuiInputTextFlags_EnterReturnsTrue); // when r changes, vMag should change to keep the same orbital energy over some threshold
 		initPos[0] = dummy;
 		ImGui::SameLine();
-		arrowToggle(initPos[0], true);
+		arrowToggle(initPos[0], true, fineCtrl);
 		
-		ImGui::SliderFloat("theta", &initPos[1], 0, glm::pi<float>(), "%.2f rad");
+		ImGui::SliderFloat("theta", &initPos[1], 0, glm::pi<float>(), "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SameLine();
-		arrowToggle(initPos[1], false);
+		arrowToggle(initPos[1], false, fineCtrl);
 		if (initPos[1] < 0) initPos[1] += glm::pi<float>();
 
-		ImGui::SliderFloat("phi", &initPos[2], 0, 2 * glm::pi<float>(), "%.2f rad");
+		ImGui::SliderFloat("phi", &initPos[2], 0, 2 * glm::pi<float>(), "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SameLine();
-		arrowToggle(initPos[2], false);
+		arrowToggle(initPos[2], false, fineCtrl);
 		if (initPos[2] < 0) initPos[2] += 2 * glm::pi<float>();
 
-		ImGui::SliderFloat("Velocity", &initVel[0], 0, 12, "%.2f m/s");
+		ImGui::SliderFloat("Velocity", &initVel[0], 0, 12, "%.2f m/s", ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SameLine();
-		arrowToggle(initVel[0], false);
+		arrowToggle(initVel[0], false, fineCtrl);
 		if (initVel[0] < 0) initVel[0] += 12;
 		
-		ImGui::SliderFloat("Pitch", &initVel[1], 0, glm::pi<float>(), "%.2f rad");
+		ImGui::SliderFloat("Pitch", &initVel[1], 0, glm::pi<float>(), "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SameLine();
-		arrowToggle(initVel[1], false);
+		arrowToggle(initVel[1], false, fineCtrl);
 		if (initVel[1] < 0) initVel[1] += glm::pi<float>();
 
-		ImGui::SliderFloat("Yaw", &initVel[2], 0, 2 * glm::pi<float>(), "%.2f rad");
+		ImGui::SliderFloat("Yaw", &initVel[2], 0, 2 * glm::pi<float>(), "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SameLine();
-		arrowToggle(initVel[2], false);
+		arrowToggle(initVel[2], false, fineCtrl);
 		if (initVel[2] < 0) initVel[2] += 2 * glm::pi<float>();
 
 		// init pv
@@ -363,7 +482,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 			}
 			if (!repeatName) {
 				sat->name = str0;
-				guiData.Sys->artSats.push_back(*sat);
+				guiData.Sys->artSats.insert(guiData.Sys->artSats.begin(), *sat);
 				sat = nullptr;
 				pv = nullptr;
 				newArtSat = false;
@@ -419,12 +538,14 @@ void GUI::guiDestroy() {
 	ImGui::DestroyContext();
 }
 
-void arrowToggle(float& value, bool isInt) {
+void arrowToggle(float& value, bool isInt, bool fineCtrl) {
 	float inc = 0;
 	if (isInt)
 		inc = 1;
 	else
 		inc = 0.01;
+	if (fineCtrl)
+		inc /= 4;
 	ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
 	if (ImGui::ArrowButton(std::to_string(rand()).c_str(), ImGuiDir_Left)) { value -= inc; }
 	ImGui::SameLine();
