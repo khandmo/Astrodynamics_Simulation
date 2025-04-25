@@ -22,7 +22,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	Mesh::radius = radius * LENGTH_SCALE;
 	Mesh::realRadius = radius;
 	Mesh::mass = mass * pow(10, 20);
-	if (soiID != "10") isMoon = true;
+	if (std::strcmp(soiID,"10")) isMoon = true;
 	else isMoon = false;
 
 	

@@ -118,15 +118,15 @@ public:
 		// operator for making independent copies of an art sat
 		name = new char(strlen(other.name) + 1);
 		name = other.name;
-		for (int i = 0; i < LINE_BUFF_SIZE_AS; i++) {
-			lineBuff[i] = other.lineBuff[i];
-			relLB[i] = other.relLB[i];
-			if (i < (LINE_BUFF_SIZE_AS / 2))
-				lBTime[i] = other.lBTime[i];
-		}
+
+		std::copy(other.lineBuff, other.lineBuff + (LINE_BUFF_SIZE_AS * other.lineBuffSections), lineBuff);
+		std::copy(other.relLB, other.relLB + (LINE_BUFF_SIZE_AS * other.lineBuffSections), relLB);
+		std::copy(other.lBTime , other.lBTime + (LINE_BUFF_SIZE_AS * other.lineBuffSections / 2), lBTime);
+
 		lineBuffSize = other.lineBuffSize;
 		lB_size_actual = other.lB_size_actual;
 		inTime = other.inTime;
+		lineBuffSections = other.lineBuffSections;
 		stateTime = other.stateTime;
 		simPos = other.simPos;
 		soiIdx = other.soiIdx;
@@ -155,15 +155,15 @@ public:
 	// sat name
 	const char* name = nullptr;
 	// set of orbital nodes for render and analysiss
-	pvUnit lineBuff[LINE_BUFF_SIZE_AS];
+	pvUnit* lineBuff = new pvUnit[LINE_BUFF_SIZE_AS];
 	// render set of vertex's derived from lineBuff
-	vertex_t relLB[LINE_BUFF_SIZE_AS];
+	vertex_t* relLB = new vertex_t[LINE_BUFF_SIZE_AS];
 	// UNIX time for each lineBuff node
-	double lBTime[LINE_BUFF_SIZE_AS / 2];
+	double* lBTime = new double[LINE_BUFF_SIZE_AS / 2];
 	// whole size for render
 	int lineBuffSize = -1;
 	// space in lineBuff for main orbit (rest for soi preview)
-	int lineBuffMainSize = 200;
+	//int lineBuffMainSize = LINE_BUFF_SIZE_AS;
 	// holds lineBuff index of change and soiIdx of new body
 	std::vector<std::pair<int,int>> soiNodes;
 	// struct for openGL line rendering
@@ -172,6 +172,8 @@ public:
 	int lB_size_actual = -1;
 	// true if satellite currently exists at sim time
 	bool inTime = true;
+	// different sections for different soi's / future orbits
+	int lineBuffSections = 1;
 	
 	// dynamic sets for prelim lineBuff and lBTime
 	std::vector <pvUnit>* dynBuff = nullptr;
@@ -231,7 +233,7 @@ public:
 
 	void fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime, int mod);
 
-	void soiChangeDetect(std::vector<Mesh*> bodies, double dt);
+	void soiHandle(std::vector<Mesh*> bodies, double dt);
 
 	void chartApproach(std::vector<Mesh*> bodies, int targetID);
 

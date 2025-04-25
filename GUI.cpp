@@ -350,13 +350,12 @@ void GUI::guiLoopADS(GUIData guiData) {
 			if (oldManDt != manDt || oldManData != manData) {
 				// handle thread atomic bool
 				manStopBool.store(true);
-				manStopBool.store(false);
-
 				while (guiData.Sys->maneuverThread.valid()) { // make sure thread is dead
 					if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 						guiData.Sys->maneuverThread.get();
 					}
 				}
+				manStopBool.store(false);
 
 				// transplant target, remake copySat
 				targStats copyTS; copyTS.targetIdx = -1;
@@ -375,7 +374,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 			if (guiData.Sys->maneuverThread.valid()) {
 				// fill up temp buffer for early render
 				if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-					if (!copySat->soi_ing)
+					if (!(copySat->soi_ing->load()))
 						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 0);
 					else
 						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 1);
