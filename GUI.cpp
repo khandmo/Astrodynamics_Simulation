@@ -96,7 +96,9 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 	if (ImGui::Button("Kill TimeWarp"))
 		*(guiData.tW) = 15;
-
+	ImGui::SameLine();
+	if (ImGui::Button("Warp To System Time"))
+		guiData.Sys->ArgClockSet(guiData.Sys->sysTime.time_in_sec);
 
 
 
@@ -143,6 +145,9 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 
 
+	// have a reset sat values button in case of random focus mode switches 
+	// worried about targ focus with planet focus change
+
 
 
 
@@ -151,7 +156,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 	if (focusType == 2) {
 		ArtSat* currSat = &(guiData.Sys->artSats)[-guiData.Sys->camera->focusBody - 1];
-		
+
 		// enable maneuver list in GUI
 		if (manList == nullptr || guiData.Sys->camera->focusBody != guiData.Sys->camera->lastFocusBody ||
 			manListLen != currSat->maneuvers.size()) {
@@ -185,7 +190,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 		if (targetWin) {
 			ImGui::Begin("Target", &targetWin);
 
-			ImGui::SeparatorText("TARGET ACQ");
+			ImGui::SeparatorText("TARGET ACQUISITION");
 
 			// dummy sat for maneuver info
 			ArtSat* someSat = currSat;
@@ -199,15 +204,34 @@ void GUI::guiLoopADS(GUIData guiData) {
 				else {
 					delete someSat->targStat;
 					someSat->targStat = nullptr;
+					targetFocus = false;
+					transferWin = false;
+					transfer = -1;
+					transferTime = -1;
+					synPeriod = -1;
 				}
 			}
 
+			// handle target focus
+			if (targetFocus && guiData.Sys->camera->focusBody < 0) {
+				lastFocus = guiData.Sys->camera->focusBody;
+				guiData.Sys->camera->focusBody = someSat->targStat->targetIdx;
+			}
+			else if (guiData.Sys->camera->focusBody > 0) {
+				guiData.Sys->camera->focusBody = lastFocus;
+				lastFocus = -1;
+			}
+
 			if (someSat->targStat != nullptr) {
-				if (someSat->lastTargIdx != someSat->targStat->targetIdx) { // targ update check
+				/*if (someSat->lastTargIdx != someSat->targStat->targetIdx) { // targ update check
 					someSat->lastTargIdx = someSat->targStat->targetIdx;
-				}
+				}*/
 				ImGui::Combo("Target Select", &someSat->targStat->targetIdx, bodyNames, bodyNamesLen);
-				
+
+				if (ImGui::Button("Target Focus")) {
+					targetFocus = !targetFocus;
+				}
+
 				someSat->targStat->soiRad = guiData.Sys->bodies[someSat->targStat->targetIdx]->soiRadius;
 
 				ImGui::Text("Closest Approach: %.2f km", someSat->targStat->closeAppr);
@@ -220,6 +244,69 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 				// time to optimal transfer?
 				// warp button to optimal transfer?
+				if (ImGui::Button("Hohmann Transfer Windows")) {
+					transferWin = !transferWin;
+					if (!transferWin && transfer != -1)
+						transfer = -1;
+				}
+
+				if (transferWin) {
+					// give closest future automatically
+					ImGui::Text("Transfer %d\t", (int)transfer);
+					
+					if (transferTime == -1) { // only do this once for any planet, use period to shift
+						transferTime = guiData.Sys->hohmannCalc(someSat->soiIdx, someSat->targStat->targetIdx,
+							*guiData.simTime, synPeriod);
+
+						if (synPeriod != -1 && synPeriod < 0)
+							synPeriod *= -1;
+
+						char tDate[80];
+						double et = ((transferTime / 86400.0) + 2440587.5);
+						et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
+						et2utc_c(et, "ISOC", 0, 80, (SpiceChar*)tDate);
+						strncpy(transferDate, tDate, 10);
+						transferDate[10] = '\0';
+
+						transfer = 1;
+					}
+
+					
+					int lastT = transfer;
+					arrowToggle(transfer, true, false);
+					ImGui::SameLine();
+					if (ImGui::Button("Warp To") && transferTime != -1) {
+						guiData.Sys->ArgClockSet(transferTime);
+					}
+
+					if (transfer != lastT) {
+						transferTime += (transfer - lastT) * synPeriod;
+
+						// hell yes i copied this code
+						char tDate[80];
+						double et = ((transferTime / 86400.0) + 2440587.5);
+						et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
+						et2utc_c(et, "ISOC", 0, 80, (SpiceChar*)tDate);
+						strncpy(transferDate, tDate, 10);
+						transferDate[10] = '\0';
+					}
+
+					if (transfer == 0 && lastT > 0)
+						transfer = -1;
+					else if (transfer == 0 && lastT < 0)
+						transfer = 1;
+
+					
+					
+					if (transferTime != -1) {
+						ImGui::Text("Transfer Date: %s", transferDate); 
+						ImGui::Text("\tT%s", secToDay(*guiData.simTime - transferTime));
+					}
+					else {
+						ImGui::Text("Transfer not found in 3 year window.");
+					}
+
+				}
 			}
 			ImGui::End();
 		}
@@ -233,14 +320,14 @@ void GUI::guiLoopADS(GUIData guiData) {
 		if (showMan) {
 			ImGui::Combo("->", &manListCurr, manList, manListLen);
 			ImGui::SameLine();
-			if (ImGui::Button("Go-To")) { 
+			if (ImGui::Button("Go-To")) {
 				goToManTime = currSat->maneuvers[manListCurr].time;
 			}
 
 			ImGui::Text("%s", currSat->maneuvers[manListCurr].desc);
 			ImGui::Text("deltaV: %.2f m/s", glm::length(currSat->maneuvers[manListCurr].newState.Vel - currSat->maneuvers[manListCurr].origState.Vel) * 1000);
 			ImGui::Text("Burn in T%s", secToDay(currSat->maneuvers[manListCurr].time - *guiData.simTime));
-			
+
 		}
 
 		ImGui::SameLine();
@@ -260,13 +347,13 @@ void GUI::guiLoopADS(GUIData guiData) {
 			}
 
 		}
-		
+
 		if (ImGui::Button("Refresh Orbit") && currSat->inTime) {
 			currSat->refreshTraj(guiData.Sys->bodies, *guiData.simTime);
 		}
 
 
-		if (newMan){ // maneuver logic
+		if (newMan) { // maneuver logic
 
 			// should not use static here
 			static char str0[30] = "maneuver 1"; // modify to tick up with amt of maneuvers
@@ -281,7 +368,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 
 			manData[0] *= 1000; // have to move this above fineCtrl copy
-			if (fineCtrl && fineCtrlData == glm::vec3 { 0, 0, 0 }) {
+			if (fineCtrl && fineCtrlData == glm::vec3{ 0, 0, 0 }) {
 				fineCtrlData = manData;
 			}
 			else if (!fineCtrl && fineCtrlData != glm::vec3{ 0, 0, 0 }) {
@@ -294,19 +381,19 @@ void GUI::guiLoopADS(GUIData guiData) {
 			if (manDt < 0) manDt += currSat->stat->orbitalPeriod;
 
 
-			
+
 			if (fineCtrl) { // FOR ALL FINE CTRL MUST MAKE SURE MODIFIED BOUNDS ARE WITHIN PARAMETER BOUNDS
 				float lBnd = fineCtrlData[0] - 75; float uBnd = fineCtrlData[0] + 75;
 				if (lBnd < 0)
 					lBnd = 0;
 				ImGui::SliderFloat("Velocity", &manData[0], lBnd, uBnd, "%.3f m/s", ImGuiInputTextFlags_EnterReturnsTrue);
 			}
-			else 
+			else
 				ImGui::SliderFloat("Velocity", &manData[0], 0, 8000, "%.2f m/s", ImGuiInputTextFlags_EnterReturnsTrue);
 			ImGui::SameLine();
 			arrowToggle(manData[0], true, fineCtrl);
 			manData[0] /= 1000;
-	
+
 
 
 
@@ -374,7 +461,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 			if (guiData.Sys->maneuverThread.valid()) {
 				// fill up temp buffer for early render
 				if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-					if (!(copySat->soi_ing->load()))
+					if (!(copySat->soi_ing->load()) && !(copySat->escaping))
 						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 0);
 					else
 						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 1);
@@ -382,7 +469,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 				else {
 					// or if done processing empty thread
 					guiData.Sys->maneuverThread.get();
-					
+
 					// handle target closest approach
 					if (copySat->targStat != nullptr) {
 						copySat->chartApproach(guiData.Sys->bodies, copySat->targStat->targetIdx);
@@ -402,8 +489,8 @@ void GUI::guiLoopADS(GUIData guiData) {
 				manData[0] = -manData[0];
 			// save maneuver
 			if (ImGui::Button("Save Maneuver")) {
-				currSat->maneuvers.push_back({ (copySat->maneuvers[copySat->maneuvers.size() - 1].origState), 
-					(copySat->maneuvers[copySat->maneuvers.size() - 1].newState), newManDt + manDt, str0, str1});
+				currSat->maneuvers.push_back({ (copySat->maneuvers[copySat->maneuvers.size() - 1].origState),
+					(copySat->maneuvers[copySat->maneuvers.size() - 1].newState), newManDt + manDt, str0, str1 });
 				delete copySat;
 				copySat = nullptr;
 				manDt = 0;

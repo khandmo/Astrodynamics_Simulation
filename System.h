@@ -43,7 +43,9 @@ public:
 
 	// async threads
 	std::future<void> maneuverThread;
+	std::future<void> twThread;
 	std::mutex mtx;
+	std::mutex mtxT;
 
 
 	Shader dS = Shader("default.vert", "default.frag");
@@ -79,6 +81,12 @@ public:
 	void updateBodyState(); // handles input during application run-time
 
 	void orbLineHandle(glm::vec3 cameraPos);
+
+	// return time of last/next hohmann transfer from b1 to b2
+	double hohmannCalc(int b1, int b2, double dt, double& synT);
+
+	// determine distance between two bodies at time dt
+	double bodyDistTo(int b1, int b2, double dt);
 
 	void shaderSet(); // should use list of all emission bodies and list of all diffuse bodies
 

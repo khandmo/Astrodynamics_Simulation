@@ -5,12 +5,14 @@
 void stateVecToSim(char* vec, state& someState);
 void sat2CSV(ArtSat& sat, char* buff, int& buffSize);
 void csv2Sat(ArtSat& sat, char* buff, std::vector<Mesh*>* bodies);
+char* chrono2SpiceStr(const char* input);
 
 System::System() {
 	// init SPICE kernels
-	furnsh_c("spice_kernels/de441_part-1.bsp"); // for pos/vel of bodies (baryID)
-	furnsh_c("spice_kernels/de441_part-2.bsp");
+	furnsh_c("spice_kernels/de441_part-2.bsp"); // for pos/vel of bodies (baryID)
+	furnsh_c("spice_kernels/de441_part-1.bsp");
 	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
+	furnsh_c("spice_kernels/naif0012.tls.txt");
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
 	// initialize radius as true radius in km divided by a factor of 6100/4550000000 to be consistent with orbital distances
 	bodiesActual.push_back(initBody("Sun", "Textures/SQmercury.jpg", 1.989f * pow(10, 10), 696340.0f, 0.0f, 0.0f, 0.0f, true, false, "10", "0", 10, 10, 0)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
@@ -18,12 +20,12 @@ System::System() {
 	bodiesActual.push_back(initBody("Venus", "Textures/SQvenus.jpg", 4.8675f * pow(10, 4), 6051.8f, 0.0f, 3, 0.0434617764f, false, false, "10", "0", 2, 299, 225));
 	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 5.97237f * pow(10, 4), 6371.0f, 0.0f, 23.5, 10.56121166f, false, false, "10", "0", 3, 399, 365));
 	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 7.342f * pow(10, 2), 1737.4f, 0.0f, 1.5, 0.35800717f, false, false, "399", "3", 301, 301, 27));
-	//bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, 10.57f, false, false, "0", 499, 4, 687));
-	//bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, 25.64f, false, false, "0", 5, 599, 4331));
-	//bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 5.6834f * pow(10, 6), 58232.0f, 0.0f, 26.73, 23.6886f, false, false, "0", 6, 699, 10759));
-	//bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", 0.0f, 75000.0f, 140000.0f, 26.73, 21.0f, false, true, "0", 6, 699, 10759));
-	//bodiesActual.push_back(initBody("Uranus", "Textures/SQuranus.jpg", 8.681 * pow(10, 5), 25362.0f, 0.0f, 97.7, 14.6939f, false, false, "0", 7, 799, 30689));
-	//bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, 15.8418f, false, false, "0", 8, 899, 60182));
+	bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, 10.57f, false, false, "10", "0", 4, 499, 687));
+	//bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, 25.64f, false, false, "10", "0", 5, 599, 4331));
+	//bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 5.6834f * pow(10, 6), 58232.0f, 0.0f, 26.73, 23.6886f, false, false, "10", "0", 6, 699, 10759));
+	//bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", 0.0f, 75000.0f, 140000.0f, 26.73, 21.0f, false, true, "10", "0", 6, 699, 10759));
+	//bodiesActual.push_back(initBody("Uranus", "Textures/SQuranus.jpg", 8.681 * pow(10, 5), 25362.0f, 0.0f, 97.7, 14.6939f, false, false, "10", "0", 7, 799, 30689));
+	//bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, 15.8418f, false, false, "10", "0", 8, 899, 60182));
 	
 	// transplant bodies addresses
 	for (int i = 0; i < bodiesActual.size(); i++) {
@@ -350,6 +352,70 @@ void System::orbLineHandle(glm::vec3 cameraPos) {
 	else if (distMoon < moonDistLowBound) {
 		dullBodies[moonIdx]->lineColor.w = 0;
 	}
+}
+
+double System::hohmannCalc(int b1, int b2, double dt, double& synT) {
+	if (bodies[b1]->isMoon || bodies[b2]->isMoon || b1 == 0 || b2 == 0)
+		return -1;
+
+	// assume circular orbits eg. r1 and r2 are fixed no matter the dt
+	// compute transfer angle
+	double mu = 6.67430 * pow(10, -20) * bodies[0]->mass;
+
+	double tTime, r1, r2, w1, w2, phase;
+
+	glm::dvec3 r1V = bodies[b1]->getPV(dt, false, false).Pos;
+	glm::dvec3 r2V = bodies[b2]->getPV(dt, false, false).Pos;
+
+	r1 = glm::length(r1V);
+	r2 = glm::length(r2V);
+
+	tTime = glm::pi<double>() * sqrt(pow((r1 + r2) / 2, 3) / mu);
+
+	w1 = sqrt(mu / pow(r1, 3)); w2 = sqrt(mu / pow(r2, 3));
+
+	phase = glm::pi<double>() - ((w1 - w2) * tTime);
+
+	// compute current phase
+	double currPhase = acos(glm::dot(r1V, r2V) / (r1 * r2)), cross = glm::cross(r1V, r2V).z;
+
+	if (cross < 0)
+		currPhase = (2 * glm::pi<double>()) - currPhase;
+
+	double tt = (phase - currPhase) / (w2 - w1);
+
+	synT = (2 * glm::pi<double>()) / (w1 - w2);
+
+	return dt + tt;
+}
+
+double System::bodyDistTo(int b1, int b2, double dt) {
+	glm::dvec3 r1 = bodies[b1]->getPV(dt, false, false).Pos;
+	glm::dvec3 r2 = bodies[b2]->getPV(dt, false, false).Pos;
+
+	if (b1 == 0)
+		return  glm::length(r2);
+	if (b2 == 0)
+		return  glm::length(r1);
+
+	return glm::length(r1 - r2);
+}
+
+// convert WWW MMM DD HH:MM:SS YYYY to YYYY MM DD
+char* chrono2SpiceStr(const char* input) {
+	const char* month_src = input + 4;
+	const char* day_src = input + 8;
+	const char* year_src = input + 20;
+
+	int day, year;
+	char month[4] = {};
+	std::sscanf(month_src, "%3s", month);
+	std::sscanf(day_src, "%d", &day);
+	std::sscanf(year_src, "%d", &year);
+
+	static char result[16] = {};
+	std::snprintf(result, sizeof(result), "%04d %s %02d", year, month, day);
+	return result;
 }
 
 System::~System() {

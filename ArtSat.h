@@ -110,6 +110,8 @@ struct maneuver {
 	const char* desc;
 };
 
+// finds angle between two vectors
+float getAngle(glm::vec3 v1, glm::vec3 v2);
 
 class ArtSat {
 public:
@@ -119,14 +121,14 @@ public:
 		name = new char(strlen(other.name) + 1);
 		name = other.name;
 
-		std::copy(other.lineBuff, other.lineBuff + (LINE_BUFF_SIZE_AS * other.lineBuffSections), lineBuff);
-		std::copy(other.relLB, other.relLB + (LINE_BUFF_SIZE_AS * other.lineBuffSections), relLB);
-		std::copy(other.lBTime , other.lBTime + (LINE_BUFF_SIZE_AS * other.lineBuffSections / 2), lBTime);
+		std::copy(other.lineBuff, other.lineBuff + (LINE_BUFF_SIZE_AS * other.lineBuffSect.size()), lineBuff);
+		std::copy(other.relLB, other.relLB + (LINE_BUFF_SIZE_AS * other.lineBuffSect.size()), relLB);
+		std::copy(other.lBTime , other.lBTime + (LINE_BUFF_SIZE_AS * other.lineBuffSect.size() / 2), lBTime);
 
 		lineBuffSize = other.lineBuffSize;
 		lB_size_actual = other.lB_size_actual;
 		inTime = other.inTime;
-		lineBuffSections = other.lineBuffSections;
+		lineBuffSect = other.lineBuffSect;
 		stateTime = other.stateTime;
 		simPos = other.simPos;
 		soiIdx = other.soiIdx;
@@ -173,7 +175,7 @@ public:
 	// true if satellite currently exists at sim time
 	bool inTime = true;
 	// different sections for different soi's / future orbits
-	int lineBuffSections = 1;
+	std::vector<int> lineBuffSect;
 	
 	// dynamic sets for prelim lineBuff and lBTime
 	std::vector <pvUnit>* dynBuff = nullptr;
@@ -210,6 +212,7 @@ public:
 	std::atomic<bool> *threadStop = nullptr;
 	std::atomic<bool> *soi_ing = new std::atomic<bool>(false);
 	bool fxnStop = false;
+	bool escaping = false;
 	bool isCopy = false;
 	
 	pvUnit* prevPV = nullptr;

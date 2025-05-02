@@ -56,10 +56,17 @@ public:
 	bool targetWin = false;
 	bool retrograde = false;
 	bool fineCtrl = false;
+	bool transferWin = false;
+	bool targetFocus = false;
 	
 	const char** manList = nullptr;
 	int manListLen = 0;
 	int manListCurr = 0;
+	float transfer = -1;
+	double transferTime = -1;
+	double synPeriod = -1;
+	char* transferDate = new char[10];
+	int lastFocus = -1;
 
 	glm::vec3 manData = { 0, 0, 0 };
 	glm::vec3 oldManData = manData;

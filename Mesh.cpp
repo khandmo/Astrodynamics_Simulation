@@ -37,7 +37,10 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	SpiceDouble lt;
 	double et = ((UTCtime / 86400.0) + 2440587.5); // UTC to Julian
 	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET	
-	spkezr_c(std::to_string(spiceID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
+	int ephID = spiceID;
+	if (spiceID > 399)  // current ephemeris requirements
+		ephID = baryID;
+	spkezr_c(std::to_string(ephID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
 	stateChange(state);
 	Pos = new glm::vec3{ state[0], state[1], state[2] };
 	oPos = new glm::vec3{ *Pos };
@@ -98,7 +101,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 				lineBufferSize -= 2 * (LINE_BUFF_SIZE_U + 1 - i); // ******************************** need a way to cut out lines that bridge unfulfilled orbits
 				break;
 			}
-			spkezr_c(std::to_string(spiceID).c_str(), tPt, "ECLIPJ2000", "NONE", soiID, state, &lt);
+			spkezr_c(std::to_string(ephID).c_str(), tPt, "ECLIPJ2000", "NONE", soiID, state, &lt);
 			stateChange(state);
 
 			vertex_t dummy{};
@@ -268,8 +271,12 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	double et = ((UTCtime / 86400.0) + 2440587.5); // UTC to JD
 	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
 
+	int ephID = spiceID;
+	if (spiceID > 399)  // current ephemeris requirements
+		ephID = baryID;
+
 	(*spiceMtx).lock();
-	spkezr_c(std::to_string(spiceID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
+	spkezr_c(std::to_string(ephID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
 	(*spiceMtx).unlock();
 
 	stateChange(state);
@@ -391,7 +398,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 				for (int i = 0; i < numRefVerts; i++) {
 
 					(*spiceMtx).lock();
-					spkezr_c(std::to_string(spiceID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "ECLIPJ2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
+					spkezr_c(std::to_string(ephID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "ECLIPJ2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
 					(*spiceMtx).unlock();
 
 					stateChange(stateDt);
@@ -484,7 +491,12 @@ pvUnit Mesh::getPV(double time, bool stateChanged, bool rotated) { // *** add bo
 	SpiceDouble lt;
 	double et = ((time / 86400.0) + 2440587.5);
 	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
-	spkezr_c(std::to_string(spiceID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
+
+	int ephID = spiceID;
+	if (spiceID > 399) { // current ephemeris requirements
+		ephID = baryID;
+	}
+	spkezr_c(std::to_string(ephID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
 
 	
 	if (stateChanged) stateChange(state);
@@ -625,6 +637,7 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 	double rt = et + timeWidth/2;  *prt = rt;
 
 	double rfDt = (rt - bt) / REF_LIST_SIZE_U; *refListDt = rfDt;
+
 
 	SpiceDouble stateBt[6];
 	SpiceDouble stateRt[6];
