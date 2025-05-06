@@ -80,7 +80,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 
 	// need to detect a full orbit (return to pt OR orbital period calculation)
 	// return to pt would work for spacecraft imp too, worth trying
-
+	
 	// conversions
 	int hour = 60 * 60;
 	int day = hour * 24;

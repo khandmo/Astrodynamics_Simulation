@@ -102,7 +102,7 @@ int main() {
 		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, &Sys.satPos, skyboxOn, dt);
 		// values to be able to see the sun from neptune and handle resized windows
 		(camera).updateWindowSize(data.width, data.height);
-		(camera).updateMatrix(45.0f, 0.001f, 6100.0f);
+		(camera).updateMatrix(45.0f, 0.001f, 80000.0f);
 
 		(Renderer).updateWindowSize(data.width, data.height);
 

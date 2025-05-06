@@ -98,7 +98,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 		*(guiData.tW) = 15;
 	ImGui::SameLine();
 	if (ImGui::Button("Warp To System Time"))
-		guiData.Sys->ArgClockSet(guiData.Sys->sysTime.time_in_sec);
+		guiData.Sys->ArgClockSet(1746894552);
 
 
 
@@ -366,6 +366,11 @@ void GUI::guiLoopADS(GUIData guiData) {
 			ImGui::SameLine();
 			ImGui::Checkbox("Retrograde Burn", &retrograde);
 
+			if (ImGui::Button("- Test Man -")) {
+				manDt = 868;
+				manData[0] = 3.78;
+			}
+
 
 			manData[0] *= 1000; // have to move this above fineCtrl copy
 			if (fineCtrl && fineCtrlData == glm::vec3{ 0, 0, 0 }) {
@@ -386,10 +391,10 @@ void GUI::guiLoopADS(GUIData guiData) {
 				float lBnd = fineCtrlData[0] - 75; float uBnd = fineCtrlData[0] + 75;
 				if (lBnd < 0)
 					lBnd = 0;
-				ImGui::SliderFloat("Velocity", &manData[0], lBnd, uBnd, "%.3f m/s", ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SliderFloat("Velocity", &manData[0], lBnd, uBnd, "%.3f m/s");
 			}
 			else
-				ImGui::SliderFloat("Velocity", &manData[0], 0, 8000, "%.2f m/s", ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SliderFloat("Velocity", &manData[0], 0, 8000, "%.2f m/s");
 			ImGui::SameLine();
 			arrowToggle(manData[0], true, fineCtrl);
 			manData[0] /= 1000;
@@ -403,10 +408,10 @@ void GUI::guiLoopADS(GUIData guiData) {
 					lBnd = -glm::pi<float>() / 2;
 				else if (uBnd > glm::pi<float>() / 2)
 					uBnd = glm::pi<float>() / 2;
-				ImGui::SliderFloat("Pitch", &manData[1], lBnd, uBnd, "%.3f rad", ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SliderFloat("Pitch", &manData[1], lBnd, uBnd, "%.3f rad");
 			}
 			else
-				ImGui::SliderFloat("Pitch", &manData[1], -glm::pi<float>() / 2, glm::pi<float>() / 2, "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SliderFloat("Pitch", &manData[1], -glm::pi<float>() / 2, glm::pi<float>() / 2, "%.2f rad");
 			ImGui::SameLine();
 			arrowToggle(manData[1], false, fineCtrl);
 
@@ -420,10 +425,10 @@ void GUI::guiLoopADS(GUIData guiData) {
 					lBnd = -glm::pi<float>();
 				else if (uBnd > glm::pi<float>())
 					uBnd = glm::pi<float>();
-				ImGui::SliderFloat("Yaw", &manData[2], lBnd, uBnd, "%.3f rad", ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SliderFloat("Yaw", &manData[2], lBnd, uBnd, "%.3f rad");
 			}
 			else
-				ImGui::SliderFloat("Yaw", &manData[2], -glm::pi<float>(), glm::pi<float>(), "%.2f rad", ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SliderFloat("Yaw", &manData[2], -glm::pi<float>(), glm::pi<float>(), "%.2f rad");
 			ImGui::SameLine();
 			arrowToggle(manData[2], false, fineCtrl);
 			if (manData[2] > glm::pi<float>()) manData[2] -= 2 * glm::pi<float>();

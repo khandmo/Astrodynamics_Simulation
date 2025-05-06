@@ -175,7 +175,7 @@ public:
 	// true if satellite currently exists at sim time
 	bool inTime = true;
 	// different sections for different soi's / future orbits
-	std::vector<int> lineBuffSect;
+	std::vector<std::pair<int, int>> lineBuffSect;
 	
 	// dynamic sets for prelim lineBuff and lBTime
 	std::vector <pvUnit>* dynBuff = nullptr;

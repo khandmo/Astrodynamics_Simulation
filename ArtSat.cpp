@@ -34,7 +34,7 @@ double totalEnergy(pvUnit pv, double M, double* KE, double* PE);
 // calculates adapting time factor for efficient orbit drawing
 double timeFactorCalc(pvUnit* pv, std::vector<Mesh*> bodies, int soiID);
 // grow buffers by 1 section
-void buffAppend(pvUnit* &lB, vertex_t* &relLB, double* &lBT, std::vector<int> &lineBuffSections);
+void buffAppend(pvUnit* &lB, vertex_t* &relLB, double* &lBT, std::vector<std::pair<int, int>>& lineBuffSect);
 
 ArtSat::ArtSat() {
 
@@ -64,7 +64,7 @@ int ArtSat::ArtSatPlan(pvUnit pv, double dt, int soiIndex, std::vector <Mesh*> b
 		}
 
 		soiIdx = soiIndex;
-		lineBuffSect.push_back(soiIdx);
+		lineBuffSect.push_back({ soiIdx, LINE_BUFF_SIZE_AS });
 
 		pvUnit* pvSC = new pvUnit(pv);
 		stateChange(&(pvSC->Pos), &(pvSC->Vel));
@@ -132,156 +132,161 @@ void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, std::a
 }
 
 void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, double mod) {
+	if (tW != 15) {
 
 
-	if (dt < maneuvers[0].time || lastEphTime != -1 && dt - lastEphTime > 60 * 60 * 24) { // mod is -1 at art sat creation
-		inTime = false;
-		delete satVis;
-		satVis = nullptr;
-		return;
-	}
-	else {
-		inTime = true;
-	}
+		if (dt < maneuvers[0].time || lastEphTime != -1 && dt - lastEphTime > 60 * 60 * 24) { // mod is -1 at art sat creation
+			inTime = false;
+			delete satVis;
+			satVis = nullptr;
+			return;
+		}
+		else {
+			inTime = true;
+		}
 
-	// check if maneuver scheduled and execute
-	if (mod != -1 && !isCopy) {
-		for (int i = 0; i < maneuvers.size(); i++) {
-			// if hit
-			if (maneuvers[i].time == dt) {
+		// check if maneuver scheduled and execute
+		if (mod != -1 && !isCopy) {
+			for (int i = 0; i < maneuvers.size(); i++) {
+				// if hit
+				if (maneuvers[i].time == dt) {
 
-				if (tW < 15) {
-					*state = maneuvers[i].origState;
+					if (tW < 15) {
+						*state = maneuvers[i].origState;
+					}
+					else {
+						*state = maneuvers[i].newState;
+					}
+
+					chartTraj(*state, bodies, dt);
+					if (targStat != nullptr)
+						chartApproach(bodies, targStat->targetIdx);
+					return;
 				}
-				else {
+				// if blow past, these go through each prev, not trigger on correct
+				else if (tW > 15 && dt > maneuvers[i].time && lastManIdx < i) {
 					*state = maneuvers[i].newState;
+					lastManIdx = i;
+
+					chartTraj(*state, bodies, maneuvers[i].time);
+					if (targStat != nullptr)
+						chartApproach(bodies, targStat->targetIdx);
+					return;
+				}
+				else if (tW < 15 && maneuvers[i].time > dt && lastManIdx > i) {
+					*state = maneuvers[i].origState;
+					lastManIdx = i;
+
+					chartTraj(*state, bodies, maneuvers[i].time);
+					if (targStat != nullptr)
+						chartApproach(bodies, targStat->targetIdx);
+					return;
+				}
+			}
+		}
+
+
+		if (inTime) {
+			if (mod == 1 && lineColor != glm::vec4{ 0.0f, 0.3f, 1.0f, 0.43f }) {
+				lineColor = { 0.0f, 0.3f, 1.0f, 0.43f };
+			}
+			// should refresh orbits at every turning point
+
+			if (targStat != nullptr && (int)lastTargIdx != targStat->targetIdx) { // mk1 == nullptr && 
+				lastTargIdx = targStat->targetIdx;
+				chartApproach(bodies, targStat->targetIdx);
+			}
+			else if (mk1 != nullptr) {
+				mk1->corrPos = *bodies[soiIdx]->Pos;
+				if (targStat != nullptr && bodies[targStat->targetIdx]->isMoon)
+					mk2->corrPos = *bodies[targStat->targetIdx]->gravSource->Pos;
+			}
+			if (satVis == nullptr) {
+				satVis = new Marker(1, 1, (glm::vec3)stateButChanged->Pos, *bodies[soiIdx]->Pos);
+			}
+			// should refresh orbit at soi change
+			int lastSoi = soiIdx;
+			if (soiDetector(bodies, state->Pos, stateTime, &soiIdx, -1)) {
+				*state = translatePV(*state, bodies, stateTime, lastSoi, soiIdx);
+				refreshTraj(bodies, stateTime);
+			}
+
+			// handle state update, get close quick with orbit nodes
+			int counter = abs(dt - stateTime), manJump = 0;
+			double lastTime = stateTime, dummy = 0;
+			if (stat->orbitalPeriod > 3600 && dt - stateTime > (stat->orbitalPeriod / 70)) { // arbitrary const
+				manJump = 1;
+				pvUnit lBpv;
+				// if dt greater than last node go to it and refresh traj
+				if (dt > lBTime[(LINE_BUFF_SIZE_AS / 2) - 2]) {
+					lBpv = lineBuff[LINE_BUFF_SIZE_AS - 2];
+					invStateChange(&lBpv.Pos, &lBpv.Vel);
+					*state = lBpv; // inv state change it!
+					stateTime = lBTime[(LINE_BUFF_SIZE_AS / 2) - 2];
+					refreshTraj(bodies, dt);
 				}
 
-				chartTraj(*state, bodies, dt);
-				if (targStat != nullptr)
-					chartApproach(bodies, targStat->targetIdx);
-				return;
-			}
-			// if blow past, these go through each prev, not trigger on correct
-			else if (tW > 15 && dt > maneuvers[i].time && lastManIdx < i) {
-				*state = maneuvers[i].newState;
-				lastManIdx = i;
-
-				chartTraj(*state, bodies, maneuvers[i].time);
-				if (targStat != nullptr)
-					chartApproach(bodies, targStat->targetIdx);
-				return;
-			}
-			else if (tW < 15 && maneuvers[i].time > dt && lastManIdx > i) {
-				*state = maneuvers[i].origState;
-				lastManIdx = i;
-
-				chartTraj(*state, bodies, maneuvers[i].time);
-				if (targStat != nullptr)
-					chartApproach(bodies, targStat->targetIdx);
-				return;
-			}
-		}
-	}
-
-
-	if (inTime) {
-		if (mod == 1 && lineColor != glm::vec4{ 0.0f, 0.3f, 1.0f, 0.43f }) {
-			lineColor = { 0.0f, 0.3f, 1.0f, 0.43f };
-		}
-		// should refresh orbits at every turning point
-
-		if (targStat != nullptr && (int)lastTargIdx != targStat->targetIdx) { // mk1 == nullptr && 
-			lastTargIdx = targStat->targetIdx;
-			chartApproach(bodies, targStat->targetIdx);
-		}
-		else if (mk1 != nullptr) {
-			mk1->corrPos = *bodies[soiIdx]->Pos;
-			if (targStat != nullptr && bodies[targStat->targetIdx]->isMoon)
-				mk2->corrPos = *bodies[targStat->targetIdx]->gravSource->Pos;
-		}
-		if (satVis == nullptr) {
-			satVis = new Marker(1, 1, (glm::vec3)stateButChanged->Pos, *bodies[soiIdx]->Pos);
-		}
-		// should refresh orbit at soi change
-		int lastSoi = soiIdx;
-		if (soiDetector(bodies, state->Pos, stateTime, &soiIdx, -1)) {
-			*state = translatePV(*state, bodies, stateTime, lastSoi, soiIdx);
-			refreshTraj(bodies, stateTime);
-		}
-
-		// handle state update, get close quick with orbit nodes
-		int counter = abs(dt - stateTime), manJump = 0;
-		double lastTime = stateTime, dummy = 0;
-		if (stat->orbitalPeriod > 3600 && dt - stateTime > (stat->orbitalPeriod / 70)) { // arbitrary const
-			manJump = 1;
-			pvUnit lBpv;
-			// if dt greater than last node go to it and refresh traj
-			if (dt > lBTime[(LINE_BUFF_SIZE_AS / 2) - 2]) {
-				lBpv = lineBuff[LINE_BUFF_SIZE_AS - 2];
+				int i = 0;
+				for (i = 0; i < LINE_BUFF_SIZE_AS / 2; i++) {
+					if (lBTime[i] > dt) {
+						i--;
+						break;
+					}
+				}
+				lBpv = lineBuff[i * 2];
 				invStateChange(&lBpv.Pos, &lBpv.Vel);
-				*state = lBpv; // inv state change it!
-				stateTime = lBTime[(LINE_BUFF_SIZE_AS / 2) - 2];
+				*state = lBpv;
+				lastTime = lBTime[i];
+				counter = dt - lastTime;
+			}
+			else if (stat->orbitalPeriod > 3600 && stateTime - dt > (stat->orbitalPeriod / 70)) { // going backwards
+				manJump = 1;
+				int i = 0;
+				while (i < maneuvers.size() - 1) {
+					if (floor(maneuvers[i].time) > floor(dt)) {
+						i--;
+						break;
+					}
+					else if (floor(maneuvers[i].time) == floor(dt)) {
+						break;
+					}
+					i++;
+				}
+				*state = maneuvers[i].newState;
+				lastTime = maneuvers[i].time;
+				counter = lastTime - dt;
+			}
+			// once have closest orbit node, integrate to curr time
+			float timeStep = 1.0f;
+			if (tW < 15) timeStep = -timeStep;
+
+			while (counter > 0) {
+				updatePV(state, bodies, soiIdx, lastTime + timeStep, timeStep, dummy);
+				lastTime += timeStep;
+				counter--;
+			}
+
+			*stateButChanged = *state;
+			stateChange(&(stateButChanged->Pos), &(stateButChanged->Vel));
+			stateTime = dt;
+
+			ArtSat::simPos = (glm::vec3)stateButChanged->Pos + *(bodies[soiIdx]->Pos);
+			if (!isCopy) {
+				satVis->fixedPos = (glm::vec3)stateButChanged->Pos;
+				satVis->corrPos = *(bodies[soiIdx]->Pos);
+			}
+			else { // just update corrPos
+				satVis->corrPos = *(bodies[soiIdx]->Pos);
+			}
+
+			if (manJump) {
+				// if a big jump (maneuver switch), refresh traj
 				refreshTraj(bodies, dt);
 			}
+		}
+	}
 
-			int i = 0;
-			for (i = 0; i < LINE_BUFF_SIZE_AS / 2; i++) {
-				if (lBTime[i] > dt) {
-					i--;
-					break;
-				}
-			}
-			lBpv = lineBuff[i * 2];
-			invStateChange(&lBpv.Pos, &lBpv.Vel);
-			*state = lBpv;
-			lastTime = lBTime[i];
-			counter = dt - lastTime;
-		}
-		else if (stat->orbitalPeriod > 3600 && stateTime - dt > (stat->orbitalPeriod / 70)) { // going backwards
-			manJump = 1;
-			int i = 0;
-			while (i < maneuvers.size() - 1) {
-				if (floor(maneuvers[i].time) > floor(dt)) {
-					i--;
-					break;
-				}
-				else if (floor(maneuvers[i].time) == floor(dt)) {
-					break;
-				}
-				i++;
-			}
-			*state = maneuvers[i].newState;
-			lastTime = maneuvers[i].time;
-			counter = lastTime - dt; 
-		}
-		// once have closest orbit node, integrate to curr time
-		float timeStep = 1.0f;
-		if (tW < 15) timeStep = -timeStep;
-		
-		while (counter > 0) {
-			updatePV(state, bodies, soiIdx, lastTime + timeStep, timeStep, dummy);
-			lastTime += timeStep;
-			counter--;
-		}
-
-		*stateButChanged = *state;
-		stateChange(&(stateButChanged->Pos), &(stateButChanged->Vel));
-		stateTime = dt;
-
-		ArtSat::simPos = (glm::vec3)stateButChanged->Pos + *(bodies[soiIdx]->Pos);
-		if (!isCopy) {
-			satVis->fixedPos = (glm::vec3)stateButChanged->Pos;
-			satVis->corrPos = *(bodies[soiIdx]->Pos);
-		}
-		else { // just update corrPos
-			satVis->corrPos = *(bodies[soiIdx]->Pos);
-		}
-
-		if (manJump) {
-			// if a big jump (maneuver switch), refresh traj
-			refreshTraj(bodies, dt);
-		}
+	if (inTime) {
 
 		// handle stats update
 		stat->timeToApo = abs(apoapsis->time - (dt - stat->initTime));
@@ -300,35 +305,32 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, doubl
 		if (lB_size_actual != -1)
 			buffFill = lB_size_actual;
 
-		for (int i = 0; i < buffFill; i++) {
-			relLB[i] = { { lineBuff[i].Pos, 2 }, lineColor };
-			relLB[i].pos += *(bodies[soiIdx]->Pos);
-			// change color for out of soi nodes
-			if (soiNodes.size() > 0) {
-				if (possibleIdx == soiNodes.size()) {
-					soiChange = false;
-				}
-				else if (i == soiNodes[possibleIdx].first) {
-					soiChange = true;
-					possibleIdx++;
-					relLB[i].col = { 0.0f, 0.8f, 0.2f, 0.43f };
-					relLB[i + 1].col = relLB[i].col;
-				}
-			}
-			if (lineBuffSect.size() > 1 && i >= LINE_BUFF_SIZE_AS - 1) { // print soi preview /// NEED TO MAKE THIS WORK FOR ANY NUMBER SECTIONS NOT JUST TWO
-				if (lineBuff[i].Pos.x == lineBuff[i].Pos.y && lineBuff[i].Pos.y == lineBuff[i].Pos.z && lineBuff[i].Pos.x == 0) { // lazy fix
-					relLB[i] = relLB[i - 1];
-					continue;
+		// i - lB section, j - idx per section, k - relLB idx, l - lineBuff idx
+		int k = 0, l = 0;
+		for (int i = 0; i < lineBuffSect.size(); i++) {
+			glm::vec4 buffColor = lineColor;
+			if (i != 0)
+				buffColor = { 0.2f * i , 0.8f, 0.2f * i, 0.43f };
+
+			l = LINE_BUFF_SIZE_AS * i; // reset l before each new section
+
+			for (int j = 0; j < lineBuffSect[i].second; j++) {
+				relLB[k] = { { lineBuff[l].Pos, 2 }, buffColor };
+				relLB[k].pos += *(bodies[lineBuffSect[i].first]->Pos);
+
+				if (lineBuff[l].Pos.x == lineBuff[l].Pos.y && lineBuff[l].Pos.y == lineBuff[l].Pos.z && lineBuff[l].Pos.x == 0) { // lazy fix
+					relLB[k] = relLB[k - 1];
+					//continue;
 				}
 
-				relLB[i] = { { lineBuff[i].Pos, 2 }, lineColor };
-				relLB[i].pos += *(bodies[lineBuffSect[floor(i / (float)LINE_BUFF_SIZE_AS)]]->Pos);
-				relLB[i].col = { 0.0f + (floor(i / (float)LINE_BUFF_SIZE_AS) * 0.2f) , 0.8f, 0.2f, 0.43f }; // mod red by each subsequent buff sector
+				if (j == LINE_BUFF_SIZE_AS - 1) // makes sure the traj's don't connect
+					relLB[k] = relLB[k - 1];
 
-				if (i == LINE_BUFF_SIZE_AS - 1) // makes sure the traj's don't connect
-					relLB[i] = relLB[i - 1];
+				k++; l++;
 			}
+
 		}
+		lB_size_actual = k;
 	}
 }
 
@@ -379,8 +381,12 @@ ArtSat::~ArtSat() {
 }
 
 void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
+
+	dynBuff = new std::vector <pvUnit>;
+	dynTimes = new std::vector <double>;
+
 	// thread change guard
-	while ((threadStop == nullptr || !(*threadStop)) && !fxnStop) {
+	while (((threadStop == nullptr || !(*threadStop)) && !fxnStop) && dynBuff != nullptr) {
 		// init vars
 		double itTime = dt;
 		float min = 60.0f * pow(log10(bodies[soiIdx]->mass / bodies[3]->mass) + 1, 1.5) ;
@@ -395,8 +401,7 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 			lineBuff[0] = *pvSC;
 
 		std::vector <pvUnit> dynLBN;
-		dynBuff = new std::vector <pvUnit>;
-		dynTimes = new std::vector <double>;
+		
 
 		bool close = false, dir = false, dir2 = false, escape = false;
 		double lastToPV, toPV = 0;
@@ -515,6 +520,7 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 		else
 			fillBuff(dynBuff, dynTimes, 1);
 
+
 		delete T; delete U;
 		delete dynBuff;
 		delete dynTimes;
@@ -529,7 +535,7 @@ void ArtSat::chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt) {
 			// run through chartTraj again with sun soi
 			// might need to modify base timeStep
 			buffAppend(lineBuff, relLB, lBTime, lineBuffSect);
-			lineBuffSect.push_back(0);
+			lineBuffSect.push_back({0, LINE_BUFF_SIZE_AS});
 			pvUnit sunPV = translatePV(*pvCurr, bodies, itTime, soiIdx, 0);
 			int lastSoi = soiIdx;
 			soiIdx = 0;
@@ -593,7 +599,7 @@ void ArtSat::fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime
 	while ((threadStop == nullptr || !(threadStop->load())) && !fxnStop && dynBuff != nullptr && dynBuff->size() != 0) { // && *soi_ing == mod
 
 		int j = (LINE_BUFF_SIZE_AS * (lineBuffSect.size() - 1)) + 1; float overflow = 0; int overflowAmt = 0;
-		bool sumUnderOne = false; bool overflowNow = false;
+		bool sumUnderOne = false;
 
 		// fill step lineBuff with dynLineBuff
 		float sum = dynBuff->size() / (float)((LINE_BUFF_SIZE_AS - 2) / 2);
@@ -612,16 +618,17 @@ void ArtSat::fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime
 
 		// fill loop, divides dynLBS evenly depending on line buff size
 		for (int k = 0; k < dynBuff->size(); k++) {
-			overflowNow = false;
-			while (!sumUnderOne && ((k - overflowAmt) % (int)sum) != 0 && k < dynBuff->size()) {
-				k++;
+			if (!sumUnderOne) {
+				while (((k - overflowAmt) % (int)sum) != 0 && k < dynBuff->size()) {
+					k++;
+				}
+				overflow += sum - (int)sum;
+				if (overflow > 1) {
+					k++; overflowAmt++;
+					overflow = overflow - (int)overflow;
+				}
 			}
-			overflow += sum - (int)sum;
-			if (overflow > 1) {
-				k++; overflowNow = true; overflowAmt++;
-				overflow = overflow - (int)overflow;
-			}
-			if (k < dynBuff->size() && (overflowNow || !sumUnderOne) && j < (LINE_BUFF_SIZE_AS * lineBuffSect.size()) - 1) { 
+			if (k < dynBuff->size() && j < (LINE_BUFF_SIZE_AS * lineBuffSect.size()) - 1) { 
 				lineBuff[j] = { (*dynBuff)[k] };
 				lineBuff[j + 1] = lineBuff[j];
 				lBTime[(j - 1) / 2] = (*dynTime)[k];
@@ -656,7 +663,7 @@ void ArtSat::fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime
 
 void ArtSat::soiHandle(std::vector<Mesh*> bodies, double dt) {
 	soi_ing->store(true);
-
+	int trigger = -1;
 	// loop through lineBuff for pts in lineBuff in soi,  use helper fxn and check if any 
 	// return a change,
 	soiNodes.clear();
@@ -666,7 +673,11 @@ void ArtSat::soiHandle(std::vector<Mesh*> bodies, double dt) {
 		pos = lineBuff[i].Pos;
 		invStateChange(&pos, &dummyVec);
 		if (soiDetector(bodies, pos, lBTime[i / 2], &currSoiIdx, -1)) {
-			soiNodes.push_back({ i, currSoiIdx });
+			if (currSoiIdx == -1) {
+				if (trigger == 1) return;
+				trigger = 1;
+			} else
+				soiNodes.push_back({ i, currSoiIdx });
 		}
 	}
 	if (soiNodes.size() < 2 || soiNodes[0].second == 0) {
@@ -678,7 +689,7 @@ void ArtSat::soiHandle(std::vector<Mesh*> bodies, double dt) {
 
 	// make some space & append sect
 	buffAppend(lineBuff, relLB, lBTime, lineBuffSect);
-	lineBuffSect.push_back(soiNodes[0].second);
+	lineBuffSect.push_back({ soiNodes[0].second, LINE_BUFF_SIZE_AS });
 
 	// I DONT KNOW WHAT THE FUCK THIS FOR LOOP IS FOR OR WHY IT WAS 0 - 2
 	for (int i = 0; i < 1; i++) {
@@ -710,7 +721,7 @@ void ArtSat::soiHandle(std::vector<Mesh*> bodies, double dt) {
 			timeFactor = timeFactorCalc(&pv, bodies, soiNodes[i].second);
 
 			if (soiDetector(bodies, pv.Pos, updDt, &soiNodes[i].second, soiNodes[i].second)) {
-				if (dynBuff->size() == 0 && soiNodes[i].second == targStat->targetIdx) {
+				if (dynBuff->size() == 0 && targStat != nullptr && soiNodes[i].second == targStat->targetIdx) {
 					targStat->soiCapture = true;
 					captureTime = updDt;
 				}
@@ -721,6 +732,9 @@ void ArtSat::soiHandle(std::vector<Mesh*> bodies, double dt) {
 			}
 			else if (dynBuff->size() != 0)
 				break;
+		}
+		if (2 * dynBuff->size() < LINE_BUFF_SIZE_AS) {
+			lineBuffSect[lineBuffSect.size() - 1].second = 2 * dynBuff->size();
 		}
 		// fill up lineBuff with trajectory
 		soi_ing->store(false);
@@ -1140,8 +1154,14 @@ double timeFactorCalc(pvUnit* pv, std::vector<Mesh*> bodies, int soiID) {
 
 	double factor = 1;
 	double mRatio = bodies[soiID]->mass / bodies[3]->mass;
-	double posFactor = (vecMag(pv->Pos) - bodies[soiID]->realRadius) * pow(10.0, -log10(mRatio) * (3.0 / 7.0)) / 1000;
+	double mFactor = pow(10.0, -log10(mRatio) * (3.0 / 7.0));
+	double posFactor = (vecMag(pv->Pos) - bodies[soiID]->realRadius) * mFactor / 1000;
+
+	//if (mRatio > 10)
+		//posFactor *= mFactor;
+
 	double expFactor = exp(posFactor / 285.0) + 1;
+
 	float factorThresh = 1.5;
 	if (posFactor < factorThresh)
 		factor = posFactor;
@@ -1155,7 +1175,7 @@ double timeFactorCalc(pvUnit* pv, std::vector<Mesh*> bodies, int soiID) {
 	return factor;
 }
 
-void buffAppend(pvUnit* &lB, vertex_t* &relLB, double* &lBT, std::vector<int> &lineBuffSect) {
+void buffAppend(pvUnit* &lB, vertex_t* &relLB, double* &lBT, std::vector<std::pair<int, int>> &lineBuffSect) {
 
 	pvUnit* dummyBuff = new pvUnit[LINE_BUFF_SIZE_AS * lineBuffSect.size()];
 	std::copy(lB, lB + (LINE_BUFF_SIZE_AS * lineBuffSect.size()), dummyBuff);
