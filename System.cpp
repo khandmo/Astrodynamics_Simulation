@@ -24,12 +24,12 @@ System::System() {
 	bodiesActual.push_back(initBody("Venus", "Textures/SQvenus.jpg", 4.8675f * pow(10, 4), 6051.8f, 0.0f, 3, 0.0434617764f, false, false, "10", "0", 2, 299, 225));
 	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 5.97237f * pow(10, 4), 6371.0f, 0.0f, 23.5, 10.56121166f, false, false, "10", "0", 3, 399, 365));
 	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 7.342f * pow(10, 2), 1737.4f, 0.0f, 1.5, 0.35800717f, false, false, "399", "3", 301, 301, 27));
-	//bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, 10.57f, false, false, "10", "0", 4, 499, 687));
-	//bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, 25.64f, false, false, "10", "0", 5, 599, 4331));
-	//bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 5.6834f * pow(10, 6), 58232.0f, 0.0f, 26.73, 23.6886f, false, false, "10", "0", 6, 699, 10759));
+	bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, 10.57f, false, false, "10", "0", 4, 499, 687));
+	bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, 25.64f, false, false, "10", "0", 5, 599, 4331));
+	bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 5.6834f * pow(10, 6), 58232.0f, 0.0f, 26.73, 23.6886f, false, false, "10", "0", 6, 699, 10759));
 	//bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", 0.0f, 75000.0f, 140000.0f, 26.73, 21.0f, false, true, "10", "0", 6, 699, 10759));
 	bodiesActual.push_back(initBody("Uranus", "Textures/SQuranus.jpg", 8.681 * pow(10, 5), 25362.0f, 0.0f, 97.7, 14.6939f, false, false, "10", "0", 7, 799, 30689));
-	//bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, 15.8418f, false, false, "10", "0", 8, 899, 60182));
+	bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, 15.8418f, false, false, "10", "0", 8, 899, 60182));
 	
 	// transplant bodies addresses
 	for (int i = 0; i < bodiesActual.size(); i++) {

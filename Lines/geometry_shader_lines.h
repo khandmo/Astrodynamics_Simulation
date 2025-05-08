@@ -44,8 +44,10 @@ typedef struct geom_shader_lines_device
 
     struct geom_shader_lines_attrib_locations
     {
-        GLuint pos_width;
-        GLuint col;
+        GLuint pos_width1;
+        GLuint col1;
+        GLuint pos_width2;
+        GLuint col2;
     } attribs;
 
     uniform_data_t* uniform_data;

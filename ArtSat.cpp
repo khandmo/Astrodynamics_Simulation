@@ -354,9 +354,9 @@ void ArtSat::ArtSatRender(Camera* camera, Mesh lightSource) {
 			buffSize = lB_size_actual;
 
 		geom_shdr_lines_update(pathDevice, relLB,
-			buffSize, sizeof(vertex_t), &uni);
+			buffSize - 1, sizeof(vertex_t), &uni);
 				
-		geom_shdr_lines_render(pathDevice, buffSize);
+		geom_shdr_lines_render(pathDevice, buffSize - 1);
 
 		if (satVis != nullptr)
 			satVis->MarkerRender(camera);

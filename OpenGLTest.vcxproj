@@ -197,6 +197,7 @@
     <None Include="geoLine.frag" />
     <None Include="geoLine.geo" />
     <None Include="geoLine.vert" />
+    <None Include="geoLine2.vert" />
     <None Include="imgui\imgui.natstepfilter" />
     <None Include="light.frag" />
     <None Include="light.vert" />

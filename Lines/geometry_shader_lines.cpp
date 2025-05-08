@@ -10,18 +10,16 @@ geom_shdr_lines_init_device( void )
 {
   geom_shader_lines_device_t* device = (geom_shader_lines_device_t * )malloc( sizeof(geom_shader_lines_device_t ) );
 
-  std::string vertexCode = get_file_contents("geoLine.vert");
+  std::string vertexCode = get_file_contents("geoLine2.vert");
   std::string fragmentCode = get_file_contents("geoLine.frag");
-  std::string geometryCode = get_file_contents("geoLine.geo");
+  //std::string geometryCode = get_file_contents("geoLine.geo");
 
   // string to char array
   const char* vs_src = vertexCode.c_str();
   const char* fs_src = fragmentCode.c_str();
-  const char* gs_src = geometryCode.c_str();
 
   GLuint vertex_shader = glCreateShader( GL_VERTEX_SHADER );
   GLuint fragment_shader = glCreateShader( GL_FRAGMENT_SHADER );
-  GLuint geometry_shader = glCreateShader( GL_GEOMETRY_SHADER );
 
   glShaderSource( vertex_shader, 1, &vs_src, 0 );
   glCompileShader( vertex_shader );
@@ -31,26 +29,21 @@ geom_shdr_lines_init_device( void )
   glCompileShader( fragment_shader );
   gl_utils_assert_shader_compiled( fragment_shader, "FRAGMENT_SHADER" );
 
-  glShaderSource( geometry_shader, 1, &gs_src, 0 );
-  glCompileShader( geometry_shader );
-  gl_utils_assert_shader_compiled( geometry_shader, "GEOMETRY_SHADER" );
-
   device->program_id = glCreateProgram();
   glAttachShader( device->program_id, vertex_shader );
-  glAttachShader( device->program_id, geometry_shader );
   glAttachShader( device->program_id, fragment_shader );
   glLinkProgram( device->program_id );
   gl_utils_assert_program_linked( device->program_id );
   
   glDetachShader( device->program_id, vertex_shader );
-  glDetachShader( device->program_id, geometry_shader );
   glDetachShader( device->program_id, fragment_shader );
   glDeleteShader( vertex_shader );
-  glDeleteShader( geometry_shader );
   glDeleteShader( fragment_shader );
 
-  device->attribs.pos_width = glGetAttribLocation( device->program_id, "pos_width" ); // linked to index 0
-  device->attribs.col = glGetAttribLocation( device->program_id, "col" ); // linked to index 1
+  device->attribs.pos_width1 = glGetAttribLocation( device->program_id, "pos_width1" ); // linked to index 0
+  device->attribs.col1 = glGetAttribLocation( device->program_id, "col1" ); // linked to index 1
+  device->attribs.pos_width2 = glGetAttribLocation(device->program_id, "pos_width2"); // linked to index 0
+  device->attribs.col2 = glGetAttribLocation(device->program_id, "col2"); // linked to index 1
 
   device->uniforms.mvp = glGetUniformLocation( device->program_id, "u_mvp" ); // linked to index 1
   device->uniforms.viewport_size = glGetUniformLocation( device->program_id, "u_viewport_size" ); // linked to index 2
@@ -71,9 +64,19 @@ geom_shdr_lines_init_device( void )
   glEnableVertexAttribArray(0); // binding_idx
   // 4 is for the amount of GL_FLOAT's associated with attrib
   glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 2*sizeof(glm::vec4), 0); // the (void*) turns decimal to hex
-  
+  glVertexAttribDivisor(0, 1);
+
   glEnableVertexAttribArray(1);
   glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 2*sizeof(glm::vec4), (void*)sizeof(glm::vec4));
+  glVertexAttribDivisor(1, 1);
+
+  glEnableVertexAttribArray(2);
+  glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec4), (void*)(2 * sizeof(glm::vec4)));
+  glVertexAttribDivisor(2, 1);
+
+  glEnableVertexAttribArray(2);
+  glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec4), (void*)(3 * sizeof(glm::vec4)));
+  glVertexAttribDivisor(3, 1);
 
   glBindVertexArray(0); // Unbind VAO
 
@@ -102,6 +105,7 @@ geom_shdr_lines_update(geom_shader_lines_device_t* device_in, const void* data, 
 
 
   glBindBuffer(GL_ARRAY_BUFFER, device->vbo);
+  glBufferData(GL_ARRAY_BUFFER, n_elems * elem_size, NULL, GL_DYNAMIC_DRAW);
   glBufferSubData(GL_ARRAY_BUFFER, 0, n_elems * elem_size, data);
 
   return n_elems;
@@ -126,7 +130,7 @@ geom_shdr_lines_render( const geom_shader_lines_device_t* device_in, const int32
 
   glBindVertexArray( device->vao );
 
-  glDrawArrays( GL_LINES, 0, count );
+  glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, count - 1);
 
   glDisable(GL_BLEND);
   //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
