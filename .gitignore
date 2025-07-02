@@ -362,3 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /spice_kernels
+/screenshots
+/Textures
+/testDataDV.txt
