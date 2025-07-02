@@ -22,6 +22,7 @@
 // yoshida coefficients
 #define yw0 (-cbrt(2) / (2 - cbrt(2)))
 #define yw1 (1 / (2 - cbrt(2)))
+#define tW_thresh 24
 
 
 struct vertex;
@@ -164,8 +165,6 @@ public:
 	double* lBTime = new double[LINE_BUFF_SIZE_AS / 2];
 	// whole size for render
 	int lineBuffSize = -1;
-	// space in lineBuff for main orbit (rest for soi preview)
-	//int lineBuffMainSize = LINE_BUFF_SIZE_AS;
 	// holds lineBuff index of change and soiIdx of new body
 	std::vector<std::pair<int,int>> soiNodes;
 	// struct for openGL line rendering
@@ -214,6 +213,8 @@ public:
 	bool fxnStop = false;
 	bool escaping = false;
 	bool isCopy = false;
+	bool fastChart = false;
+	bool planning = false;
 	
 	pvUnit* prevPV = nullptr;
 
@@ -224,7 +225,7 @@ public:
 
 	int ArtSatPlan(pvUnit pv, double dt, int soiID, std::vector <Mesh*> bodies);
 
-	void ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, std::atomic<bool> &stop, double dt, const char name[30], const char desc[30]);
+	void ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double dt, const char name[30], const char desc[30]);
 
 	void ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, double mod);
 

@@ -25,6 +25,7 @@ public:
 	// takes vertices and size in bytes
 	VBO(std::vector <Vertex>& vertices);
 
+	void Update(std::vector <Vertex>& vertices);
 	void Bind();
 	void Unbind();
 	void Delete();

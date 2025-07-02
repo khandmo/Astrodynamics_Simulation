@@ -46,7 +46,7 @@ public:
 	bool newArtSat = false;
 	bool newMan = false;
 	// new artificial satellite parameters
-	glm::vec3 initPos = { 415, glm::pi<float>() / 2, 0 };
+	glm::vec3 initPos = { 415, glm::pi<float>() / 2, glm::pi<float>() / 4 };
 	glm::vec3 initVel = { 7.67, glm::pi<float>() / 2, glm::pi<float>() / 2 };
 
 	ArtSat* copySat = nullptr;

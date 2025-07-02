@@ -13,23 +13,42 @@ System::System() {
 	furnsh_c("spice_kernels/de441_part-1.bsp");
 	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 	furnsh_c("spice_kernels/naif0012.tls.txt");
+	furnsh_c("spice_kernels/jup365.bsp"); // jupiter main satellite positions
+	furnsh_c("spice_kernels/sat441.bsp"); // saturn main satellite positions
+	furnsh_c("spice_kernels/ura182.bsp"); // uranus main satellite positions
+	furnsh_c("spice_kernels/nep095.bsp"); // neptune main satellite positions
 	erract_c("SET", 0, (SpiceChar*)"RETURN");
 
 	SystemTime();
 
 	// initialize all solar system bodies, a body's gravitational source must be initialized before that body
 	// initialize radius as true radius in km divided by a factor of 6100/4550000000 to be consistent with orbital distances
-	bodiesActual.push_back(initBody("Sun", "Textures/SQmercury.jpg", 1.989f * pow(10, 10), 696340.0f, 0.0f, 0.0f, 0.0f, true, false, "10", "0", 10, 10, 0)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
-	bodiesActual.push_back(initBody("Mercury", "Textures/SQmercury.jpg", 3.3011f * pow(10, 3), 2439.7f, 0.0f, 2, 0.0600068844f, false, false, "10", "0", 1, 199, 88));
-	bodiesActual.push_back(initBody("Venus", "Textures/SQvenus.jpg", 4.8675f * pow(10, 4), 6051.8f, 0.0f, 3, 0.0434617764f, false, false, "10", "0", 2, 299, 225));
-	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 5.97237f * pow(10, 4), 6371.0f, 0.0f, 23.5, 10.56121166f, false, false, "10", "0", 3, 399, 365));
-	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 7.342f * pow(10, 2), 1737.4f, 0.0f, 1.5, 0.35800717f, false, false, "399", "3", 301, 301, 27));
-	bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, 10.57f, false, false, "10", "0", 4, 499, 687));
-	bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, 25.64f, false, false, "10", "0", 5, 599, 4331));
-	bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 5.6834f * pow(10, 6), 58232.0f, 0.0f, 26.73, 23.6886f, false, false, "10", "0", 6, 699, 10759));
-	//bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", 0.0f, 75000.0f, 140000.0f, 26.73, 21.0f, false, true, "10", "0", 6, 699, 10759));
-	bodiesActual.push_back(initBody("Uranus", "Textures/SQuranus.jpg", 8.681 * pow(10, 5), 25362.0f, 0.0f, 97.7, 14.6939f, false, false, "10", "0", 7, 799, 30689));
-	bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, 15.8418f, false, false, "10", "0", 8, 899, 60182));
+	bodiesActual.push_back(initBody("Sun", "Textures/SQmercury.jpg", 1.989f * pow(10, 10), 696340.0f, 0.0f, 0.0f, true, false, "10", 10, 10, 0)); // CODE FIX FOR soiID if it is -1 to orbit the center of the universe or stay still
+	bodiesActual.push_back(initBody("Mercury", "Textures/SQmercury.jpg", 3.3011f * pow(10, 3), 2439.7f, 0.0f, 2, false, false, "10", 1, 199, 88));
+	bodiesActual.push_back(initBody("Venus", "Textures/SQvenus.jpg", 4.8675f * pow(10, 4), 6051.8f, 0.0f, 3, false, false, "10", 2, 299, 225));
+	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 5.97237f * pow(10, 4), 6371.0f, 0.0f, 23.5, false, false, "10", 3, 399, 365));
+	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 7.342f * pow(10, 2), 1737.4f, 0.0f, 1.5, false, false, "399", 301, 301, 27));
+
+	bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, false, false, "10", 4, 499, 687));
+	bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, false, false, "10", 5, 599, 4331));
+	bodiesActual.push_back(initBody("Io", "Textures/SQgrey.jpg", 8.93 * pow(10, 2), 1560.0f, 0.0f, 0, false, false, "5", 5, 501, 1.7691f));
+	bodiesActual.push_back(initBody("Europa", "Textures/SQgrey.jpg", 4.7998 * pow(10, 2), 1560.8f, 0.0f, 0, false, false, "5", 5, 502, 3.5512f));
+	bodiesActual.push_back(initBody("Ganymede", "Textures/SQgrey.jpg", 1.4819 * pow(10, 3), 2634.1f, 0.0f, 0, false, false, "5", 5, 503, 7.1546f));
+	bodiesActual.push_back(initBody("Callisto", "Textures/SQgrey.jpg", 1.0759 * pow(10, 3), 2410.3f, 0.0f, 0, false, false, "5", 5, 504, 16.689f));
+
+	bodiesActual.push_back(initBody("Saturn", "Textures/SQsaturn.jpg", 5.6834f * pow(10, 6), 58232.0f, 0.0f, 26.73, false, false, "10", 6, 699, 10759));
+	bodiesActual.push_back(initBody("saturnRings", "Textures/SQsaturnRings.jpg", 0.0f, 75000.0f, 140000.0f, 26.73, false, true, "10", 6, 699, 10759));
+	bodiesActual.push_back(initBody("Mimas", "Textures/SQgrey.jpg", 3.749 * pow(10, -1), 396.0f, 0.0f, 0, false, false, "6", 6, 601, 0.942f));
+	bodiesActual.push_back(initBody("Enceladus", "Textures/SQgrey.jpg", 1.08 * pow(10, 0), 257.0f, 0.0f, 0, false, false, "6", 6, 602, 1.37f));
+	bodiesActual.push_back(initBody("Tethys", "Textures/SQgrey.jpg", 6.176 * pow(10, 0), 538.0f, 0.0f, 0, false, false, "6", 6, 603, 1.888f));
+	bodiesActual.push_back(initBody("Dione", "Textures/SQgrey.jpg", 1.096 * pow(10, 1), 563.0f, 0.0f, 0, false, false, "6", 6, 604, 2.737f));
+	bodiesActual.push_back(initBody("Rhea", "Textures/SQgrey.jpg", 2.31 * pow(10, 1), 765.0f, 0.0f, 0, false, false, "6", 6, 605, 4.518f));
+	bodiesActual.push_back(initBody("Titan", "Textures/SQgrey.jpg", 1.3455 * pow(10, 3), 2575.0f, 0.0f, 0, false, false, "6", 6, 606, 15.945f));
+	bodiesActual.push_back(initBody("Iapetus", "Textures/SQgrey.jpg", 1.81 * pow(10, 1), 746.0f, 0.0f, 0, false, false, "6", 6, 608, 79.32f));
+
+	bodiesActual.push_back(initBody("Uranus", "Textures/SQuranus.jpg", 8.681 * pow(10, 5), 25362.0f, 0.0f, 97.7, false, false, "10", 7, 799, 30689));
+	bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, false, false, "10", 8, 899, 60182));
+
 	
 	// transplant bodies addresses
 	for (int i = 0; i < bodiesActual.size(); i++) {
@@ -65,23 +84,23 @@ System::System() {
 
 	// set shaders
 	shaderSet();
-	updateBodyState(); // shaders stable here
 }
 
-Mesh System::initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, const char* soiIdx, int baryID, int spiceID, int orbPeriod) {
+Mesh System::initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, float orbPeriod) {
 	// init texture
-	Texture tex[] = { Texture(texFilePath, "diffuse", 0, GL_RGB, GL_UNSIGNED_BYTE) };
-
-	// init object
-	Object obj; // ******** 891.33 KB heap
-	if (!areRings) {
-		obj.Sphere(radius * LENGTH_SCALE, 0.2f, 0.4f, 0.3f); // initialize as sphere, 3 other floats don't matter
-	}
-	else {
-		obj.Rings(radius * LENGTH_SCALE, outerRadius * LENGTH_SCALE, 0.2f, 0.4f, 0.3f);
-	}
+	Texture tex[] = {Texture(texFilePath, "diffuse", 0, GL_RGB, GL_UNSIGNED_BYTE)};
 	std::vector <Texture> objTex(tex, tex + sizeof(tex) / sizeof(Texture));
 
+	// init object
+	Object* obj = new Object; // ******** 891.33 KB heap
+
+	if (!areRings) {
+		obj->Box(radius * LENGTH_SCALE);
+	}
+	else {
+		obj->Rings(radius * LENGTH_SCALE, outerRadius * LENGTH_SCALE);;
+	}
+	
 	Shader shader = dS;
 	if (isLight) {
 		shader = lS;
@@ -89,11 +108,25 @@ Mesh System::initBody(const char* name, const char* texFilePath, float mass, flo
 
 	// masses are all / 10^20 for the sake of transportation
 
+	// if soiID is 10 then soiIdx is 0, else it's a moon and check last planet in bodies !!!!!!!!!!!!!!!!!!!!!!!!!!
+	char soiIdx[3];
+	if (!std::strcmp(soiID, "10\0")) {
+		strcpy(soiIdx, "0\0");
+	}
+	else {
+		for (int i = bodiesActual.size() - 1; i > 0; i--) {
+			if (!bodiesActual[i].isMoon && !bodiesActual[i].areRings) {
+				strcpy(soiIdx, std::to_string(i).c_str());
+				break;
+			}
+		}
+	}
+
+
 	 // ********** mesh init has 1,806 KB heap
-	Mesh body(name, obj.vertices, obj.indices, objTex, radius, mass, isLight, areRings, &shader, soiID, soiIdx, baryID, spiceID, sysTime.time_in_sec, orbPeriod); // velocity will be updated with SPICE integration
+	Mesh body(name, obj->vertices, obj->indices, objTex, radius, mass, isLight, areRings, &shader, soiID, soiIdx, baryID, spiceID, sysTime.time_in_sec, orbPeriod); // velocity will be updated with SPICE integration
 	// Set Properties	
 	body.AxialTilt(axialTilt);
-	body.radRot = angleOfRot; // assign rotation speed
 	bodyRadii.push_back(radius * LENGTH_SCALE);
 
 	return body;
@@ -259,8 +292,8 @@ void System::ArtSatHandle(Camera* camera, double dt, int tW) {
 
 
 	for (int i = 0; i < artSats.size(); i++) {
-		artSats[i].ArtSatUpdState(bodies, dt, tW,  0);
 		artSats[i].ArtSatRender(camera, *(bodies[0]));
+		artSats[i].ArtSatUpdState(bodies, dt, tW,  0);		
 		if (i < satPos.size())
 			satPos[i] = &artSats[i].simPos;
 		else
@@ -275,7 +308,40 @@ void System::updateBodyState() { // System holds it's own positions, gets update
 			bodyPos[i] = (bodies[i]->Pos);
 		else
 			bodyPos.push_back((bodies[i]->Pos));
+
+		
+		Object obj;
+		bool change = false;
+		float apparent_size = abs(glm::length(camera->Position - *bodyPos[i])) / bodies[i]->radius;
+		if (apparent_size < 300) {
+			if (bodies[i]->vertices.size() < 50) { // if box and shouldn't be
+				change = true;
+				obj.Sphere(bodies[i]->radius);
+			}
+		}
+		else {
+			if (bodies[i]->vertices.size() > 50) { // if sphere and shouldn't be
+				change = true;
+				obj.Box(bodies[i]->radius);
+			}
+		}
+		if (change && !bodies[i]->areRings) {
+			bodies[i]->vertices = obj.vertices;
+			bodies[i]->indices = obj.indices;
+
+			bodies[i]->VAO.Bind();
+			bodies[i]->my_EBO->Update(bodies[i]->indices);
+			bodies[i]->my_VBO->Update(bodies[i]->vertices);			
+
+			bodies[i]->VAO.LinkAttrib(*bodies[i]->my_VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
+
+			bodies[i]->VAO.Unbind();
+			bodies[i]->my_VBO->Unbind();
+			bodies[i]->my_EBO->Unbind();
+		}
 	}
+
+	// for each body check apparent size from camera distance and radius, if above some amount make it a sphere, if below make it a box
 }
 
 void System::shaderSet() {
@@ -308,8 +374,9 @@ void System::orbLineHandle(glm::vec3 cameraPos) {
 		}
 	}
 
-	float planetDistLowBound = 3, planetDistHighBound = 15, planetDistLowLowBound = 1.4f;
-	float moonDistLowBound = 0.08f, moonDistHighBound = 0.4f; // *********** should use radius for these to scale, should make opacity calc helper fxn
+	// HARD CUT OFF ELSEWHERE OF MOON ORBIT SHOW
+	float planetDistLowBound = 12, planetDistHighBound = bodies[0]->refinedRadius, planetDistLowLowBound = 5.6f;
+	float moonDistLowBound = 0.32f, moonDistHighBound = 1.6f; // *********** should use radius for these to scale, should make opacity calc helper fxn
 	float brightColor = 0.5f;
 	float dimColor = 0.1f;
 
@@ -493,28 +560,25 @@ void System::WarpClockSet(const int currWarp) {
 	currTime.time_in_sec = std::chrono::time_point_cast<std::chrono::seconds>
 		(currTime.timeUnit).time_since_epoch().count();
 
-	std::chrono::duration<double> diff = 
-		std::chrono::time_point_cast<std::chrono::milliseconds>(currTime.timeUnit)
-		- std::chrono::time_point_cast<std::chrono::milliseconds>(sysTime.timeUnit);
+	std::chrono::duration<double>diff = currTime.timeUnit - sysTime.timeUnit;
 
 	// sample time allows for time updates roughly equivalent to Mesh::Orbit calls. Decrease if bodies jitter under time warp+
-	float diffThreshold = 1 / 150;
+	float diffThreshold = 1 / (float)50;
 	if (diff.count() >= diffThreshold) {
 		bool sign;
 		currWarp > 0 ? sign = true : sign = false;
-		double diffWarp = diff.count() * currWarp;
-		if (currWarp < 1/diffThreshold) { 
+		double diffWarp = diff.count() * (double)currWarp;
+		if (currWarp < (1/diffThreshold)) { 
 			//update ms timing
 			time_block_ms_add(simTime, (int)abs((diffWarp*1000)), sign);
 		}
 		// update with time warp multiplier
+		simTime.timeUnit += std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::duration<double>(diffWarp));
 		auto pastTimeUnit = std::chrono::system_clock::to_time_t((simTime.timeUnit));
-		pastTimeUnit += static_cast<time_t>(diffWarp);
-		simTime.timeUnit = std::chrono::system_clock::from_time_t(pastTimeUnit);
 
 		// update sim time and reset sys time
 		ctime_s(simTime.timeString, sizeof(simTime.timeString), &pastTimeUnit);
-		simTime.time_in_sec = std::chrono::time_point_cast<std::chrono::seconds>
+		simTime.time_in_sec = std::chrono::time_point_cast<std::chrono::seconds> // simTime millisecond additions aren't saved?
 			(simTime.timeUnit).time_since_epoch().count();
 
 		sysTime = currTime;

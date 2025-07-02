@@ -54,7 +54,7 @@ public:
 	const char* soiIdx;
 	int spiceID = -1;
 	int baryID = -1;
-	int orbitalPeriod = -1;
+	float orbitalPeriod = -1;
 
 	bool isLightSource;
 	bool areRings;
@@ -63,6 +63,7 @@ public:
 	glm::vec3* Pos = nullptr; // world position in sim units
 	glm::vec3* oPos = nullptr; // holder for moon relative pos
 	glm::mat4 Model;
+	glm::vec3 poleVec;
 
 	geom_shader_lines_device_t* pathDevice = nullptr;
 	vertex_t lineBuffer[(LINE_BUFF_SIZE)]; // if i hold pointers to the vertices maybe i can have more rendered
@@ -76,7 +77,7 @@ public:
 	int refListStartIdx = 0;
 	int bIdx = -1, rIdx = -1;
 	double refNodeMarkerTime = 0, lBNodeMarkerTime = 0, bt = 0, rt = 0;
-	int refinedRadius = 15;
+	int refinedRadius = 60;
 	int refinedListSize = REF_LIST_SIZE;
 	int flipper = 0;
 	float refVertsSum = 0;
@@ -103,12 +104,13 @@ public:
 	glm::mat4 lsMatrix = glm::mat4(1.0f); // light space matrix for shadows
 
 	VAO VAO;
-
+	VBO* my_VBO = nullptr;
+	EBO* my_EBO = nullptr;
 
 
 
 	Mesh(const char* objName, std::vector<Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, float radius, float mass, bool isLight, bool areRings,
-		Shader *shaderProgram, const char* soiID, const char* soiIdx, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod);
+		Shader *shaderProgram, const char* soiID, char* soiIndex, int baryIDx, int spiceIDx, double UTCtime, float orbPeriod);
 
 	// sets shader program for depth map
 	void setShadowShader(Shader& program, glm::mat4 lightSpaceMatrix);

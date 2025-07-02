@@ -6,7 +6,7 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 	 double* pbt, double* prt, int* pbtIdx, int* prtIdx, double* refListDt, const int lWidth, const glm::vec4 lColor); // generates refined List
 
 Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, float radius, float mass, bool isLight, bool areRings,
-	Shader* shaderProgram, const char* soiID, const char* soiIdx, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod) {
+	Shader* shaderProgram, const char* soiID, char* soiIndex, int baryIDx, int spiceIDx, double UTCtime, float orbPeriod) {
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
 	Mesh::indices = indices;
@@ -14,7 +14,9 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	Mesh::areRings = areRings;
 	Mesh::isLightSource = isLight;
 	Mesh::soiID = soiID;
-	Mesh::soiIdx = soiIdx;
+	char* saveDummy = (char*)malloc(strlen(soiIndex) + 1);
+	strcpy(saveDummy, soiIndex);
+	Mesh::soiIdx = saveDummy;
 	Mesh::spiceID = spiceIDx;
 	Mesh::baryID = baryIDx;
 	Mesh::orbitalPeriod = orbPeriod; // each body has a factual orbital period in days hard coded for initialization
@@ -29,7 +31,10 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 
 	// set object light emission color if any
 	if (isLight == true) {
-		//Mesh::Color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		Mesh::Color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	}
+	else {
+		Mesh::Color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	// init position(s)
@@ -38,7 +43,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	double et = ((UTCtime / 86400.0) + 2440587.5); // UTC to Julian
 	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET	
 	int ephID = spiceID;
-	if (spiceID > 399)  // current ephemeris requirements
+	if (spiceID > 399 && !isMoon)  // current ephemeris requirements
 		ephID = baryID;
 	spkezr_c(std::to_string(ephID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
 	stateChange(state);
@@ -58,25 +63,25 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	VAO.Bind();
 
 	// vertex buffer object to send to GPU - array of data on vertices to be sent to GPU
-	VBO VBO(vertices);
-
+	my_VBO = new VBO(vertices);
+	
 	// element buffer object is an array of pointers in data in VBO allows me to arrange pointers as i please instead of copying data repeatedly
-	EBO EBO(indices);
+	my_EBO = new EBO(indices);
 
 	//Link VAO to VBO
 	//parameters: VBO, which vertex attribute (layout) to configure, number of vertex attributes (1 per 3-vertex), type - of vector data stored, stride - space in memory between consecutive vertex attribs, offset - of where pos data begins in buffer
 
 	// Links VBO to Position
-	VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
+	VAO.LinkAttrib(*my_VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
 	// Links to Normals (layout 1 for shaders, offset by 3 from the start of pos
-	VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+	VAO.LinkAttrib(*my_VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
 	// Links to Colors (layout 2 for shader, offset by 6 from start of pos
-	VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
+	VAO.LinkAttrib(*my_VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
 	// Links Texture (layout 3 for shaders, offset by 9 from the start of pos
-	VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
+	VAO.LinkAttrib(*my_VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
 	VAO.Unbind();
-	VBO.Unbind();
-	EBO.Unbind();
+	my_VBO->Unbind();
+	my_EBO->Unbind();
 
 	// need to detect a full orbit (return to pt OR orbital period calculation)
 	// return to pt would work for spacecraft imp too, worth trying
@@ -92,7 +97,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 
 		double tPt = 0; // current time adjusted for frame
 		if (isMoon) tPt = et;
-		et = abs(Mesh::orbitalPeriod * day); // dunno why i have to abs this
+		et = (double)orbitalPeriod * (double)day; // dunno why i have to abs this
 		Mesh::lBVertDt = et / LINE_BUFF_SIZE_U;
 
 		for (int i = 0; i < LINE_BUFF_SIZE_U; i++) {
@@ -122,6 +127,8 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 		}
 		Mesh::pathDevice = geom_shdr_lines_init_device();
 	}
+
+
 
 	
 	/*
@@ -212,6 +219,7 @@ void Mesh::Draw(Camera& camera) {
 		// bind texture to uniform
 		textures[i].Bind();
 	}
+
 	// sets depth map from shadow render to normal render if it exists
 	if (depthMap != 0) {
 		glActiveTexture(GL_TEXTURE1);
@@ -253,12 +261,12 @@ void Mesh::AxialTilt(GLfloat tiltDeg) {
 	radrec_c(range, ra[0], dec[0], rectan); // turns ra & dec to rectangular coords
 	double poleCoords[3];
 	poleCoords[0] = rectan[1]; poleCoords[1] = rectan[2]; poleCoords[2] = rectan[0];
-	glm::vec3 poleVec = glm::vec3(poleCoords[0], poleCoords[1], poleCoords[2]);
+	poleVec = glm::vec3(poleCoords[0], poleCoords[1], poleCoords[2]);
 	poleVec = glm::rotateY(poleVec, glm::radians(-23.4f)); // north pole vector in correct frame
 
 
-	Model = glm::rotate(Model, glm::radians(tiltDeg), glm::cross(Up, poleVec));
-	axisTiltDegree = tiltDeg;
+	Model = glm::rotate(Model, -glm::radians(tiltDeg), poleVec);
+	axisTiltDegree = -tiltDeg;
 }
 
 void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3 cameraPos) {
@@ -272,7 +280,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
 
 	int ephID = spiceID;
-	if (spiceID > 399)  // current ephemeris requirements
+	if (spiceID > 399 && !isMoon)  // current ephemeris requirements
 		ephID = baryID;
 
 	(*spiceMtx).lock();
@@ -283,7 +291,6 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	glm::vec3 tempPos= glm::vec3(state[0], state[1], state[2]);
 	if (isMoon && gravSource->Pos != nullptr) tempPos += *(gravSource->Pos); 
 	
-
 	*Pos = tempPos;
 
 	// if object are rings, meshes normals must be flipped when the sun crosses the ring plane (z-axis turning points)
@@ -295,10 +302,9 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 			}
 			// must bind new normals to the shaders
 			VAO.Bind();
-			VBO VBO(vertices);
-			VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+			my_VBO->Update(vertices);
 			VAO.Unbind();
-			VBO.Unbind();
+			my_VBO->Unbind();
 		}
 		else if (Pos->z < 0 && sign) {
 			sign = !sign;
@@ -306,10 +312,10 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 				vertices[i].normal = -vertices[i].normal;
 			}
 			VAO.Bind();
-			VBO VBO(vertices);
-			VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+			my_VBO->Update(vertices);
+			// *************** ADD BACK LINK ATTRIBUTES
 			VAO.Unbind();
-			VBO.Unbind();
+			my_VBO->Unbind();
 		}
 	}
 
@@ -335,11 +341,11 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	double week = 60 * 60 * 24 * orbitalPeriod / 24; // ref list time gap, should base this on orbital period
 
 	if (!areRings) {
-		if (distanceFind(cameraPos, *Pos) < refinedRadius && bIdx == -1) {
+		if (distanceFind(cameraPos, *Pos) < refinedRadius && bIdx == -1) { // if close, utilize regined list
 			refinedList = new vertex_t[REF_LIST_SIZE];
 
 			(*spiceMtx).lock();
-			makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+			makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, ephID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
 			(*spiceMtx).unlock();
 
 			refNodeMarkerTime = UTCtime;
@@ -361,7 +367,7 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 				lBNodeMarkerTime = UTCtime;
 
 				(*spiceMtx).lock();
-				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, ephID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
 				(*spiceMtx).unlock();
 			}
 			else if (numRefVerts > 0) { //modify
@@ -472,6 +478,8 @@ Mesh::~Mesh() {
 	Pos = nullptr;
 	oPos = nullptr;
 	soiID = nullptr;
+	free(soiIdx);
+	soiIdx = nullptr;
 	refinedList = nullptr;
 	spiceMtx = nullptr;
 	ShaderProgram.Delete();
@@ -482,6 +490,10 @@ Mesh::~Mesh() {
 		pathDevice = nullptr;
 	}
 	// could/should save & delete VBO/EBO
+	delete my_VBO;
+	my_VBO = nullptr;
+	delete my_EBO;
+	my_EBO = nullptr;
 }
 */
 pvUnit Mesh::getPV(double time, bool stateChanged, bool rotated) { // *** add boolean for state change version instead
@@ -511,7 +523,7 @@ void Mesh::updateModel(Mesh& source) {
 	glm::mat4 objModel = glm::mat4(1.0f);
 	Model = glm::translate(objModel, *Pos);
 
-	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::vec3(1.0f, 0.0f, 0.0f));
+	Model = glm::rotate(Model, glm::radians(axisTiltDegree), poleVec);
 	Model = glm::rotate(Model, currAngleRad, Up);
 }
 

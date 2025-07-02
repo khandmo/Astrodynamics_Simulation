@@ -63,19 +63,19 @@ geom_shdr_lines_init_device( void )
 
   glEnableVertexAttribArray(0); // binding_idx
   // 4 is for the amount of GL_FLOAT's associated with attrib
-  glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 2*sizeof(glm::vec4), 0); // the (void*) turns decimal to hex
+  glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(glm::vec4), 0); // the (void*) turns decimal to hex
   glVertexAttribDivisor(0, 1);
 
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 2*sizeof(glm::vec4), (void*)sizeof(glm::vec4));
+  glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(glm::vec4), (void*)sizeof(glm::vec4));
   glVertexAttribDivisor(1, 1);
 
   glEnableVertexAttribArray(2);
-  glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec4), (void*)(2 * sizeof(glm::vec4)));
+  glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(glm::vec4), (void*)(2 * sizeof(glm::vec4)));
   glVertexAttribDivisor(2, 1);
 
   glEnableVertexAttribArray(2);
-  glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 2 * sizeof(glm::vec4), (void*)(3 * sizeof(glm::vec4)));
+  glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(glm::vec4), (void*)(3 * sizeof(glm::vec4)));
   glVertexAttribDivisor(3, 1);
 
   glBindVertexArray(0); // Unbind VAO
@@ -130,7 +130,7 @@ geom_shdr_lines_render( const geom_shader_lines_device_t* device_in, const int32
 
   glBindVertexArray( device->vao );
 
-  glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, count - 1);
+  glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, count);
 
   glDisable(GL_BLEND);
   //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);

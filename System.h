@@ -30,6 +30,9 @@ struct state {
 class System {
 public:
 
+	Object* obj_sphere = nullptr;
+	Object* obj_rings = nullptr;
+
 	std::vector <Mesh> bodiesActual; // holds the body meshes
 	std::vector <Mesh*> bodies; // holds the addresses to the body meshes
 	std::vector <Mesh*> lightBodies;
@@ -67,7 +70,7 @@ public:
 	System(); // initializes main bodies, shaders / saved game?
 
 	// generates body given, shaderType toggles emission/dull shader modes, adds bodies to pertenant lists
-	Mesh initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, float angleOfRot, bool isLight, bool areRings, const char* soiID, const char* soiIdx, int baryID, int spiceID, int orbPeriod);
+	Mesh initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, float orbPeriod);
 
 	// generates real missions based on ephemeris data
 	void initSat(const char* name, const char* eph, const char* prstnt);

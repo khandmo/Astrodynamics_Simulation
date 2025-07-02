@@ -117,14 +117,14 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 	// set light shader matrix
 // objects not in depth map will not produce shadows
 	float near_plane = 1.0f, far_plane = 17.5f; // if lightView matrix focuses on planets, FOV must be wide enough to catch moon(s)
-	glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f,
-		-10.0f, 10.0f, near_plane, far_plane);
+	glm::mat4 lightProjection = glm::ortho(-0.1f, 0.1f,
+		-0.1f, 0.1f, near_plane, far_plane);
 
 	int closestBody = 0;
-	float distanceToClosest = 10000;
-	// find closest planet to camera (body 0 is the sun and bodies 4 and 8 are not planets)
+	float distanceToClosest = FLT_MAX;
+	// find closest planet to camera
 	for (int i = 1; i < bodies.size(); i++) {
-		if (i != 4 && i != 8) {
+		if (!bodies[i]->isMoon && !bodies[i]->areRings) {
 			float bodyDist = abs(glm::length(camera->Position - *(bodies[i]->Pos)));
 			if (distanceToClosest > bodyDist) { // vector to body
 				distanceToClosest = bodyDist;
@@ -132,6 +132,7 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 			}
 		}
 	}
+
 
 	glm::mat4 lightView = glm::lookAt( // has be based on focused body position if a focused body exists
 		*(bodies[closestBody]->Pos) - (7.0f * glm::normalize(*(bodies[closestBody]->Pos))), // light source position - a fixed distance from the closest planet to camera
@@ -231,62 +232,63 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, do
 			(*bodies[i]).Rotate(lBody, simTime_sec);
 			(*bodies[i]).Orbit(lBody, simTime_sec, dt, cameraPos);
 			// update and render lines
-			if ((*bodies[i]).bIdx == -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
-				for (int j = 0; j < (*bodies[i]).lineBufferSize; j++) {
-					(*bodies[i]).lineBuffer[j].col = (*bodies[i]).lineColor;
-				}
-				geom_shdr_lines_update(bodies[i]->pathDevice, &bodies[i]->lineBuffer,
-					bodies[i]->lineBufferSize, sizeof(vertex_t), &uni);
-				geom_shdr_lines_render(bodies[i]->pathDevice, bodies[i]->lineBufferSize);
-			}
-			
-			if ((*bodies[i]).bIdx != -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
-				
-				vertex_t* lB = (*bodies[i]).lineBuffer;
-				vertex* rB = (*bodies[i]).refinedList;
-				const int lBSz = (*bodies[i]).lineBufferSize;
-				const int bID = (*bodies[i]).bIdx;
-				const int rID = (*bodies[i]).rIdx;
-				const int brGap = ((rID - bID + lBSz) % lBSz) - 1; // mising verts between b and r
-				const int llBSize = LINE_BUFF_SIZE + REF_LIST_SIZE;
-				vertex_t llB[llBSize];
-				int rLEndIdx = (*bodies[i]).refListStartIdx - 1 >= 0 ? (*bodies[i]).refListStartIdx - 1 : REF_LIST_SIZE - 1;
-				llB[0] = rB[rLEndIdx]; // circular cap
-				llB[0].col = (*bodies[i]).lineColor;
-				int k = 0, k2 = 0; // secondary index
-
-				if (bodies[i]->lineColor.w == 0)
-					continue;
-
-				// linebuffer implant
-				for (int j = rID; j < lBSz; j++) {
-					llB[k + 1] = lB[j];
-					llB[k + 1].col = (*bodies[i]).lineColor; // update line color
-					k++;
-					if (j == lBSz - 1) j = -1;
-					if (bID == lBSz - 1) {
-						if (j == 0) break;
+			if (!bodies[i]->areRings) {
+				if ((*bodies[i]).bIdx == -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
+					for (int j = 0; j < (*bodies[i]).lineBufferSize; j++) {
+						(*bodies[i]).lineBuffer[j].col = (*bodies[i]).lineColor;
 					}
-					else {
-						if (j == bID + 1) break;
+					geom_shdr_lines_update(bodies[i]->pathDevice, &bodies[i]->lineBuffer,
+						bodies[i]->lineBufferSize, sizeof(vertex_t), &uni);
+					geom_shdr_lines_render(bodies[i]->pathDevice, bodies[i]->lineBufferSize);
+				}
+
+				if ((*bodies[i]).bIdx != -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
+
+					vertex_t* lB = (*bodies[i]).lineBuffer;
+					vertex* rB = (*bodies[i]).refinedList;
+					const int lBSz = (*bodies[i]).lineBufferSize;
+					const int bID = (*bodies[i]).bIdx;
+					const int rID = (*bodies[i]).rIdx;
+					const int brGap = ((rID - bID + lBSz) % lBSz) - 1; // mising verts between b and r
+					const int llBSize = LINE_BUFF_SIZE + REF_LIST_SIZE;
+					vertex_t llB[llBSize];
+					int rLEndIdx = (*bodies[i]).refListStartIdx - 1 >= 0 ? (*bodies[i]).refListStartIdx - 1 : REF_LIST_SIZE - 1;
+					llB[0] = rB[rLEndIdx]; // circular cap
+					llB[0].col = (*bodies[i]).lineColor;
+					int k = 0, k2 = 0; // secondary index
+
+					if (bodies[i]->lineColor.w == 0)
+						continue;
+
+					// linebuffer implant
+					for (int j = rID; j < lBSz; j++) {
+						llB[k + 1] = lB[j];
+						llB[k + 1].col = (*bodies[i]).lineColor; // update line color
+						k++;
+						if (j == lBSz - 1) j = -1;
+						if (bID == lBSz - 1) {
+							if (j == 0) break;
+						}
+						else {
+							if (j == bID + 1) break;
+						}
 					}
-				}
 
-				// refined list implant
-				for (int j = (*bodies[i]).refListStartIdx; j < REF_LIST_SIZE; j++){
-					llB[k + 1] = rB[j];
-					llB[k + 1].col = (*bodies[i]).lineColor; // update line color
-					if (j == REF_LIST_SIZE - 1) j = -1; // handle wrap
-					if (k2 == REF_LIST_SIZE - 2) break;
-					k++;
-					k2++;
+					// refined list implant
+					for (int j = (*bodies[i]).refListStartIdx; j < REF_LIST_SIZE; j++) {
+						llB[k + 1] = rB[j];
+						llB[k + 1].col = (*bodies[i]).lineColor; // update line color
+						if (j == REF_LIST_SIZE - 1) j = -1; // handle wrap
+						if (k2 == REF_LIST_SIZE - 2) break;
+						k++;
+						k2++;
+					}
+
+					geom_shdr_lines_update((*bodies[i]).pathDevice, llB,
+						llBSize - brGap + 1, sizeof(vertex_t), &uni);
+					geom_shdr_lines_render((*bodies[i]).pathDevice, llBSize - brGap + 1);
 				}
-				
-				geom_shdr_lines_update((*bodies[i]).pathDevice, llB,
-					llBSize - brGap + 1, sizeof(vertex_t), &uni);
-				geom_shdr_lines_render((*bodies[i]).pathDevice, llBSize - brGap + 1);
 			}
-
 		}
 	}	
 }

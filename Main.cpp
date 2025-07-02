@@ -69,8 +69,8 @@ int main() {
 
 	// set skybox and time float
 	bool skyboxOn = true;
-	int dtRange[31] = { -10000000, -100000, -30000, -10000, -1000, -500, -200, -100, -64, -32, -16, -8, -4, -2, -1, 0, 
-		1, 2, 4, 8, 16, 32, 64, 100, 200, 500, 1000, 10000, 30000, 100000, 10000000}; // fixed time warp range -10mil to 10mil
+	int dtRange[31] = { -10000000, -100000, -50000, -20000, -10000, -5000, -2000, -1000, -500, -200, -100, -64, -4, -2, -1, 0, 
+		1, 2, 4, 64, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 10000000}; // fixed time warp range -10mil to 10mil
 	int dt = 16; // current time warp index 
 	bool dtChange = false;
 	float clickPTime = glfwGetTime();
@@ -79,6 +79,10 @@ int main() {
 
 	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, &Sys.simTime.time_in_sec, &Sys };
 	GUI gui(window, guiData);
+
+	bool gathered = false;
+	std::chrono::time_point<std::chrono::system_clock> prev;
+	double prev2;
 
 	std::cout << "beginning sim" << std::endl; 
 	while (!glfwWindowShouldClose(window)) {
@@ -93,7 +97,7 @@ int main() {
 		}
 		float clickCTime = glfwGetTime();
 
-		Sys.updateBodyState();
+
 
 		// input handling -  should add input for safe obliteration (cease while loop)
 		// for holding inputs
@@ -102,7 +106,7 @@ int main() {
 		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, &Sys.satPos, skyboxOn, dt);
 		// values to be able to see the sun from neptune and handle resized windows
 		(camera).updateWindowSize(data.width, data.height);
-		(camera).updateMatrix(45.0f, 0.001f, 80000.0f);
+		(camera).updateMatrix(45.0f, 0.001f, 500000.0f);
 
 		(Renderer).updateWindowSize(data.width, data.height);
 
@@ -118,9 +122,12 @@ int main() {
 		Renderer.ShadowRender(Sys.bodies, &camera);
 		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, dt, (camera).Position);
 		
+
 		//Handle changes
+		Sys.updateBodyState();
 		Sys.orbLineHandle((camera).Position);
 		Sys.ArtSatHandle(&camera, Sys.simTime.time_in_sec, dt);
+
 
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);

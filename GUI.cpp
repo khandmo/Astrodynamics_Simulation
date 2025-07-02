@@ -366,10 +366,12 @@ void GUI::guiLoopADS(GUIData guiData) {
 			ImGui::SameLine();
 			ImGui::Checkbox("Retrograde Burn", &retrograde);
 
+			/*
 			if (ImGui::Button("- Test Man -")) {
 				manDt = 868;
 				manData[0] = 3.78;
 			}
+			*/
 
 
 			manData[0] *= 1000; // have to move this above fineCtrl copy
@@ -387,14 +389,14 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 
 
-			if (fineCtrl) { // FOR ALL FINE CTRL MUST MAKE SURE MODIFIED BOUNDS ARE WITHIN PARAMETER BOUNDS
+			if (fineCtrl) { 
 				float lBnd = fineCtrlData[0] - 75; float uBnd = fineCtrlData[0] + 75;
 				if (lBnd < 0)
 					lBnd = 0;
 				ImGui::SliderFloat("Velocity", &manData[0], lBnd, uBnd, "%.3f m/s");
 			}
 			else
-				ImGui::SliderFloat("Velocity", &manData[0], 0, 8000, "%.2f m/s");
+				ImGui::SliderFloat("Velocity", &manData[0], 0, 10000, "%.2f m/s");
 			ImGui::SameLine();
 			arrowToggle(manData[0], true, fineCtrl);
 			manData[0] /= 1000;
@@ -461,15 +463,15 @@ void GUI::guiLoopADS(GUIData guiData) {
 					copySat->targStat = new targStats(copyTS);
 				copySat->isCopy = true;
 				// solve new maneuver
-				copySat->ArtSatManeuver(manData, guiData.Sys->bodies, manStopBool, newManDt + manDt, str0, str1);
+				copySat->ArtSatManeuver(manData, guiData.Sys->bodies, newManDt + manDt, str0, str1);
 			}
-			if (guiData.Sys->maneuverThread.valid()) {
+			if (guiData.Sys->maneuverThread.valid()) { // ********************************************************************* fillBuff capture for orbit draw
 				// fill up temp buffer for early render
 				if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-					if (!(copySat->soi_ing->load()) && !(copySat->escaping))
-						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 0);
+					if (!(copySat->soi_ing->load()) && !(copySat->escaping)) // checking if going to other soi (moon) or has escaped -- what does soi_ing have to do w/ fillBuff here?
+						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 0); // bounded orbit
 					else
-						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 1);
+						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 1); // escape check / escape
 				}
 				else {
 					// or if done processing empty thread
@@ -486,7 +488,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 			}
 			// render and update ( add modifier to change orbit color, fade, + update and render actual sat at same time )
 			copySat->ArtSatUpdState(guiData.Sys->bodies, newManDt + manDt, *guiData.tW, 1); // right time????
-
+			
 			oldManDt = manDt;
 			oldManData = manData;
 			// handle retrograde
@@ -516,6 +518,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 		sat = new ArtSat();
 		pv = new pvUnit;
 		sat->sysThread = &guiData.Sys->maneuverThread;
+		sat->threadStop = &manStopBool;
 	}
 	if (newArtSat) { // new satellite logic
 
@@ -562,7 +565,29 @@ void GUI::guiLoopADS(GUIData guiData) {
 		pv->Vel = glm::dvec3{ cartDummy.z, cartDummy.x, cartDummy.y };
 
 		// process pv
+
 		sat->ArtSatPlan(*pv, *(guiData.simTime), 3, guiData.Sys->bodies);
+
+		if (guiData.Sys->maneuverThread.valid()) {
+			// fill up temp buffer for early render
+			if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+				if (!(sat->soi_ing->load()))
+					sat->fillBuff(sat->dynBuff, sat->dynTimes, 0);
+				else
+					sat->fillBuff(sat->dynBuff, sat->dynTimes, 1);
+			}
+			else {
+				// or if done processing empty thread
+				guiData.Sys->maneuverThread.get();
+
+				// handle target closest approach
+				if (sat->targStat != nullptr) {
+					sat->chartApproach(guiData.Sys->bodies, sat->targStat->targetIdx);
+				}
+			}
+		}
+
+
 		sat->ArtSatUpdState(guiData.Sys->bodies, *guiData.simTime, *guiData.tW, -1);
 
 		// reset art sat parameters to default values in each, delete pvUnit as well
@@ -591,6 +616,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 				// reset init values
 				initPos = { 300, glm::pi<float>() / 2, 0 };
 				initVel = { 7.8, glm::pi<float>() / 2, 3 * glm::pi<float>() / 2 };
+
 			}
 		}
 		ImGui::SameLine();
