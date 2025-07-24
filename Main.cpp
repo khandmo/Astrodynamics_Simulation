@@ -23,6 +23,25 @@ int main() {
 	if (!glfwInit()) {
 		return -1;
 	}
+
+	// prominent memory leak breakpoint sets
+	//_crtBreakAlloc = 998;
+	//_crtBreakAlloc = 1186;
+	//_crtBreakAlloc = 1340;
+	//_crtBreakAlloc = 3062;
+	//_crtBreakAlloc = 3065;
+	//_crtBreakAlloc = 3099;
+	//_crtBreakAlloc = 3100;
+	//_crtBreakAlloc = 420394;
+	//_crtBreakAlloc = 240398;
+	//_crtBreakAlloc = 651929;
+	//_crtBreakAlloc = 651964;
+	//_crtBreakAlloc = 653047;
+	//_crtBreakAlloc = 653379;
+	//_crtBreakAlloc = 2614835;
+	//_CrtSetBreakAlloc(1160);
+
+
 	// Tells glfw what type of opengl I use
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -83,6 +102,7 @@ int main() {
 	bool gathered = false;
 	std::chrono::time_point<std::chrono::system_clock> prev;
 	double prev2;
+	_CrtDumpMemoryLeaks();
 
 	std::cout << "beginning sim" << std::endl; 
 	while (!glfwWindowShouldClose(window)) {
@@ -90,7 +110,7 @@ int main() {
 		gui.guiLoopStart(guiData);
 
 		if (!skyboxOn) {
-			glClearColor(0.24f, 0.28f, 0.45f, 1.0f);
+			glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		}
 		else {
 			glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // need to modify in sys fxn orbHandle
@@ -120,7 +140,7 @@ int main() {
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
-		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, dt, (camera).Position);
+		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, dt, (camera).Position, gui.orbitShow);
 		
 
 		//Handle changes

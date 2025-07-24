@@ -28,11 +28,13 @@ void Camera::updateMatrix(float FOVdeg, float nearPlane, float farPlane) {
 	Camera::view = view;
 
 	// calculate projection normally
-	proj = glm::perspective(glm::radians(FOVdeg), ((float)width / height), nearPlane, farPlane);
+	if (height > 0) {
+		proj = glm::perspective(glm::radians(FOVdeg), ((float)width / height), nearPlane, farPlane);
 
-	Camera::proj = proj;
+		Camera::proj = proj;
 
-	cameraMatrix = proj * view;
+		cameraMatrix = proj * view;
+	}
 }
 
 void Camera::Matrix(Shader& shader, const char* uniform) {
@@ -83,13 +85,7 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, 
 			Up = glm::vec3(0.0f, 0.0f, -1.0f);
 		}
 	}
-	// hold focus on body
-	if (focusMode == true && focusBody >= 0) {
-		Position = *bodyPos[focusBody] + focusPos;
-	}
-	else if (focusMode == true) {
-		Position = *(*satList)[-focusBody - 1] + focusPos;
-	}
+
 
 	
 	//mouse controls
@@ -191,6 +187,19 @@ void Camera::smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, 
 }
 
 void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, std::vector<float> &bodyRadii, std::vector<glm::vec3*>* satList, bool& skyBox, int& dt) {
+
+	
+	// assign focusPos if focused
+	/*if (focusMode) {
+		focusMag = glm::length(focusPos);
+		double distFM = glm::length(focusPos);
+		focusPos = Position - *bodyPos[focusBody];		
+	}
+	else if (lastFocusMode != focusMode){
+		focusPos = glm::vec3(3.0f, 0.0f, 0.0f);
+		Orientation = glm::vec3(-1.0f, 0.0f, 0.0f);
+	}*/
+
 	
 	if (keyPress(window, GLFW_KEY_P)) { // toggles skybox
 		skyBox = !skyBox;
@@ -228,7 +237,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 			cameraViewCycle = 1;
 		}
 		else if (cameraViewCycle == 1) { // planar
-			Position = glm::vec3(1000.0f, 0.0f, 0.0f);
+			Position = glm::vec3(3000.0f, 0.0f, 0.0f);
 			Orientation = glm::vec3(-1.0f, 0.0f, 0.0f);
 			Up = glm::vec3(0.0f, 1.0f, 0.0f);
 			cameraViewCycle = 0;
@@ -239,8 +248,12 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 		focusMode = !focusMode;
 		lastFocusMode = focusMode;
 		if (focusMode == true) {
-			// reset focus parameters
-			focusPos = bodyRadii[focusBody] * defaultFocus; // initialized as default focusDistMarker
+			if (focusBody >= 0) {
+				// reset focus parameters
+				focusPos = bodyRadii[focusBody] * defaultFocus; // initialized as default focusDistMarker
+			}
+			else
+				focusPos = defaultSatFocus;
 			/*
 			
 			would be cool to compare current position to position of focus body and jump to init focus distance along
@@ -253,7 +266,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 	}
 	if (lastFocusMode != focusMode && focusMode == true) {
 		lastFocusMode = focusMode;
-		
+
 		if (focusBody >= 0) {
 			focusPos = bodyRadii[focusBody] * defaultFocus;
 			Position = *bodyPos[focusBody] + focusPos;
@@ -297,18 +310,33 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 		}
 
 
-		if (lastFocusBody != focusBody) {
+		if (lastFocusBody != focusBody && lastFocusBody != INT_MAX) {
+			
 			if (focusBody >= 0) {
-				focusPos = bodyRadii[focusBody] * defaultFocus;
+				if (lastFocusBody >= 0) {
+					focusPos = (Position - *bodyPos[lastFocusBody]);
+					float bodyRatio = bodyRadii[focusBody] / bodyRadii[lastFocusBody];
+					focusPos *= bodyRatio;
+				}
 				Position = *bodyPos[focusBody] + focusPos;
 			}
 			else {
-				focusPos = defaultSatFocus;
+				if (lastFocusBody < 0)
+					focusPos = Position - *(*satList)[-lastFocusBody - 1];
+				else
+					focusPos = (Position - *bodyPos[lastFocusBody]);
 				Position = *(*satList)[-focusBody - 1] + focusPos;
 			}
-			lastFocusBody = focusBody;
-			Orientation = glm::vec3(-1.0f, 0.0f, 0.0f);
 		}
+		lastFocusBody = focusBody;
+	}
+
+	// hold focus on body
+	if (focusMode == true && focusBody >= 0) {
+		Position = *bodyPos[focusBody] + focusPos;
+	}
+	else if (focusMode == true) {
+		Position = *(*satList)[-focusBody - 1] + focusPos;
 	}
 }
 

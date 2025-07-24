@@ -5,6 +5,7 @@ Texture::Texture(const char* picturePath, const char* texType, GLuint slot, GLen
 	type = texType;
 	//generate texture
 	glGenTextures(1, &ID); 
+
 	//bind texture / assign to texture unit
 	glActiveTexture(GL_TEXTURE0 + slot); // GL_TEXTURE0 + 0
 	unit = slot;
@@ -38,7 +39,7 @@ Texture::Texture(const char* picturePath, const char* texType, GLuint slot, GLen
 	// free data
 	stbi_image_free(data);
 	//unbind texture object to prevent modification
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindTexture(GL_TEXTURE_2D, 0); 
 }
 
 void Texture::texUnit(Shader& shader, const char* uniform, GLuint unit) {

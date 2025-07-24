@@ -29,6 +29,7 @@ System::System() {
 	bodiesActual.push_back(initBody("Earth", "Textures/earth4096.jpg", 5.97237f * pow(10, 4), 6371.0f, 0.0f, 23.5, false, false, "10", 3, 399, 365));
 	bodiesActual.push_back(initBody("Moon", "Textures/moon4096.jpg", 7.342f * pow(10, 2), 1737.4f, 0.0f, 1.5, false, false, "399", 301, 301, 27));
 
+	
 	bodiesActual.push_back(initBody("Mars", "Textures/SQmars.jpg", 6.4171f * pow(10, 3), 3389.5f, 0.0f, 25, false, false, "10", 4, 499, 687));
 	bodiesActual.push_back(initBody("Jupiter", "Textures/SQjupiter.jpg", 1.8982f * pow(10, 7), 69911.0f, 0.0f, 3, false, false, "10", 5, 599, 4331));
 	bodiesActual.push_back(initBody("Io", "Textures/SQgrey.jpg", 8.93 * pow(10, 2), 1560.0f, 0.0f, 0, false, false, "5", 5, 501, 1.7691f));
@@ -47,9 +48,18 @@ System::System() {
 	bodiesActual.push_back(initBody("Iapetus", "Textures/SQgrey.jpg", 1.81 * pow(10, 1), 746.0f, 0.0f, 0, false, false, "6", 6, 608, 79.32f));
 
 	bodiesActual.push_back(initBody("Uranus", "Textures/SQuranus.jpg", 8.681 * pow(10, 5), 25362.0f, 0.0f, 97.7, false, false, "10", 7, 799, 30689));
-	bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, false, false, "10", 8, 899, 60182));
-
+	bodiesActual.push_back(initBody("Titania", "Textures/SQgrey.jpg", 3.42 * pow(10, 1), 788.9f, 0.0f, 0, false, false, "7", 7, 703, 8.7f));
+	bodiesActual.push_back(initBody("Oberon", "Textures/SQgrey.jpg", 2.88 * pow(10, 1), 761.4f, 0.0f, 0, false, false, "7", 7, 704, 13.46f));
+	bodiesActual.push_back(initBody("Umbriel", "Textures/SQgrey.jpg", 1.22 * pow(10, 1), 584.7f, 0.0f, 0, false, false, "7", 7, 702, 4.14f));
+	bodiesActual.push_back(initBody("Ariel", "Textures/SQgrey.jpg", 1.29 * pow(10, 1), 581.1f, 0.0f, 0, false, false, "7", 7, 701, 2.52f));
+	bodiesActual.push_back(initBody("Miranda", "Textures/SQgrey.jpg", 6.6 * pow(10, -1), 240.0f, 0.0f, 0, false, false, "7", 7, 705, 1.41f));
 	
+	bodiesActual.push_back(initBody("Neptune", "Textures/SQneptune.jpg", 1.02413 * pow(10, 6), 24622.0f, 0.0f, 28, false, false, "10", 8, 899, 60182));
+	bodiesActual.push_back(initBody("Triton", "Textures/SQgrey.jpg", 2.14 * pow(10, 2), 1353.0f, 0.0f, 0, false, false, "8", 8, 801, 5.87f));
+	bodiesActual.push_back(initBody("Proteus", "Textures/SQgrey.jpg", 4.4 * pow(10, -2), 210.0f, 0.0f, 0, false, false, "8", 8, 808, 1.12f));
+	//bodiesActual.push_back(initBody("Nereid", "Textures/SQgrey.jpg", 3.1 * pow(10, -3), 170.0f, 0.0f, 0, false, false, "8", 8, 802, 360.136f)); no axial data, will tear up program
+	
+
 	// transplant bodies addresses
 	for (int i = 0; i < bodiesActual.size(); i++) {
 		bodies.push_back(&bodiesActual[i]);
@@ -75,8 +85,9 @@ System::System() {
 
 	// init art sats
 	// program to take artSats and name of ephemeris data, process and add mission + maneuver to persistent memory
-	//initPersistSats("persistent_sats.txt");
-	//initSat("Artemis 1", "horizons_results_raw.txt", "persistent_sats.txt");
+	initPersistSats("persistent_sats.txt");
+	//initSat("Artemis 1", "hr_artemis_1.txt");
+	//initSat("JWST", "hr_jwst.txt");
 
 	// time memory save
 	sysTime = *(time_block*) malloc(sizeof(time_block));
@@ -132,7 +143,7 @@ Mesh System::initBody(const char* name, const char* texFilePath, float mass, flo
 	return body;
 }
 
-void System::initSat(const char* name, const char* eph, const char* prstnt) {
+void System::initSat(const char* name, const char* eph) {
 
 	// check if name is already in ArtSat list (initialized from persistent memory)
 	for (int i = 0; i < artSats.size(); i++) {
@@ -174,6 +185,9 @@ void System::initSat(const char* name, const char* eph, const char* prstnt) {
 	stateVecToSim(buff, someState);
 
 	ArtSat* sat = new ArtSat();
+	sat->sysThread = &maneuverThread;
+	sat->threadStop = &satManStop;
+	sat->mtxSat = &mtxSat;
 	double testTime = someState.time;
 	sat->ArtSatPlan({ someState.pos, someState.vel }, testTime, 3, bodies);
 	sat->name = name;
@@ -229,6 +243,7 @@ void System::initSat(const char* name, const char* eph, const char* prstnt) {
 
 
 	sat->lastEphTime = endTime;
+	std::this_thread::sleep_for(std::chrono::seconds(1));
 	artSats.push_back(*sat);
 
 
@@ -240,10 +255,10 @@ void System::initSat(const char* name, const char* eph, const char* prstnt) {
 	std::cout << "new satellite " << sat->name << " added\n";
 
 	// add sat to end of persistent txt (w/ new line at end)
-	std::fstream dataStream2(prstnt, std::fstream::out | std::fstream::app); // should just read
+	std::fstream dataStream2(persistent_memory_address, std::fstream::out | std::fstream::app); // should just read
 	if (!dataStream2) {
-		std::cout << "File " << prstnt << " failed to open / create\n";
-		dataStream.clear();
+		std::cout << "File " << persistent_memory_address << " failed to open / create\n";
+		dataStream2.clear();
 		return;
 	}
 	
@@ -256,10 +271,14 @@ void System::initSat(const char* name, const char* eph, const char* prstnt) {
 	dataStream2.write("\n", 1);
 	dataStream2.clear();
 	dataStream2.close();
+	delete sat;
 
 }
 
 void System::initPersistSats(const char* file) {
+	char* fileHold = (char*)malloc(strlen(file) + 1);
+	strcpy(fileHold, file);
+	persistent_memory_address = fileHold;
 
 	std::fstream dataStream(file, std::fstream::in); // should just read
 	if (!dataStream) {
@@ -272,9 +291,20 @@ void System::initPersistSats(const char* file) {
 	dataStream.getline(buff, 10000);
 	while (!dataStream.eof()) {
 		ArtSat* sat = new ArtSat;
+		sat->sysThread = &maneuverThread;
+		sat->threadStop = &satManStop;
+		sat->mtxSat = &mtxSat;
 		csv2Sat(*sat, buff, &bodies);
 		artSats.push_back(*sat);
 		dataStream.getline(buff, 10000);
+
+
+		while (maneuverThread.valid()) { // make sure thread is dead so info isn't exchanged
+			if (maneuverThread.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+				maneuverThread.get();
+			}
+		}
+		delete sat;
 	}
 
 
@@ -284,7 +314,64 @@ void System::initPersistSats(const char* file) {
 	// sat info is wiped after this function exits
 }
 
-void System::ArtSatHandle(Camera* camera, double dt, int tW) {
+bool System::sat2Persist(ArtSat sat, bool add) {
+	std::fstream dataStream(persistent_memory_address, std::fstream::in | std::fstream::out);
+	if (!dataStream) {
+		std::cout << "File " << persistent_memory_address << " failed to open / create\n";
+		dataStream.clear();
+		return false;
+	}
+	std::fstream tempStream("temp.txt", std::fstream::out | std::fstream::app);
+	if (!tempStream) {
+		std::cout << "Temp file failed to create\n";
+		tempStream.clear();
+		return false;
+	}
+
+	bool jobDone = false;
+
+	// search file
+	char buff[10000] = "";
+	dataStream.getline(buff, 10000);
+	while (!dataStream.eof()) {
+		char* satInFile = strstr(buff, sat.name);
+
+		if (satInFile != NULL) { // if sat found
+			jobDone = true;
+			dataStream.getline(buff, 10000);
+			continue;
+		}
+
+		tempStream.write(buff, strlen(buff)); // copy data into temp (skip if sat found)
+		tempStream.write("\n", 1);
+		dataStream.getline(buff, 10000);
+	}
+
+	dataStream.clear();
+	dataStream.close();
+
+	if (add) { // add sat to end of tempStream
+		char buff2[10000] = "";
+		int buff2Size = 0;
+		sat2CSV(sat, buff2, buff2Size);
+
+		tempStream.seekp(0, std::fstream::end);
+		tempStream.write(buff2, buff2Size);
+		tempStream.write("\n", 1);
+		jobDone = true;
+	}
+
+	// if sub just delete, if ad
+	tempStream.clear();
+	tempStream.close();
+	// replace file w/ temp file
+	std::remove(persistent_memory_address);
+	std::rename("temp.txt", persistent_memory_address);
+
+	return jobDone;
+}
+
+void System::ArtSatHandle(Camera* camera, double dt, int &tW) {
 	// if time warp over certain amount, run this in thread
 	// push estimate positions to screen until time warp is brought back down and computations can complete 
 	// use nodes for estimates, refresh traj if all out of nodes
@@ -292,6 +379,10 @@ void System::ArtSatHandle(Camera* camera, double dt, int tW) {
 
 
 	for (int i = 0; i < artSats.size(); i++) {
+		// if sat has EOM
+		if (artSats[i].mtxSat == nullptr)
+			artSats[i].mtxSat = &mtxSat;
+
 		artSats[i].ArtSatRender(camera, *(bodies[0]));
 		artSats[i].ArtSatUpdState(bodies, dt, tW,  0);		
 		if (i < satPos.size())
@@ -435,8 +526,8 @@ double System::hohmannCalc(int b1, int b2, double dt, double& synT) {
 
 	double tTime, r1, r2, w1, w2, phase;
 
-	glm::dvec3 r1V = bodies[b1]->getPV(dt, false, false).Pos;
-	glm::dvec3 r2V = bodies[b2]->getPV(dt, false, false).Pos;
+	glm::dvec3 r1V = bodies[b1]->getPV(dt, false).Pos;
+	glm::dvec3 r2V = bodies[b2]->getPV(dt, false).Pos;
 
 	r1 = glm::length(r1V);
 	r2 = glm::length(r2V);
@@ -461,8 +552,8 @@ double System::hohmannCalc(int b1, int b2, double dt, double& synT) {
 }
 
 double System::bodyDistTo(int b1, int b2, double dt) {
-	glm::dvec3 r1 = bodies[b1]->getPV(dt, false, false).Pos;
-	glm::dvec3 r2 = bodies[b2]->getPV(dt, false, false).Pos;
+	glm::dvec3 r1 = bodies[b1]->getPV(dt, false).Pos;
+	glm::dvec3 r2 = bodies[b2]->getPV(dt, false).Pos;
 
 	if (b1 == 0)
 		return  glm::length(r2);
@@ -512,6 +603,11 @@ System::~System() {
 	lS.Delete();
 	dullShader = nullptr;
 	lightShader = nullptr;
+	if (persistent_memory_address != nullptr) {
+		free((void*)persistent_memory_address);
+		persistent_memory_address = nullptr;
+	}
+
 }
 
 
@@ -647,6 +743,10 @@ void sat2CSV(ArtSat& sat, char* buff, int &buffSize) {
 		pl = strlen(temp);
 		temp[pl++] = ',';
 
+		// soi
+		snprintf(temp + pl, sizeof(temp) - pl, "%d,", sat.maneuvers[i].soi);
+		pl = strlen(temp);
+
 		// old State
 		snprintf(temp + pl, sizeof(temp) - pl, "%9.9f,", sat.maneuvers[i].origState.Pos.x);
 		pl = strlen(temp);
@@ -695,6 +795,7 @@ void csv2Sat(ArtSat& sat, char* buff, std::vector<Mesh*> *bodies) {
 	sat.name = _strdup(token);
 
 	char* endptr;
+	int soi;
 	double time;
 	pvUnit oState, nState;
 
@@ -709,6 +810,10 @@ void csv2Sat(ArtSat& sat, char* buff, std::vector<Mesh*> *bodies) {
 		token = strtok(NULL, ",");
 		char* desc = new char[strlen(token) + 1];
 		strncpy(desc, token, strlen(token) + 1);
+		
+		// soi
+		token = strtok(NULL, ",");
+		soi = strtod(token, &endptr);
 
 		// old State
 		token = strtok(NULL, ",");
@@ -749,9 +854,9 @@ void csv2Sat(ArtSat& sat, char* buff, std::vector<Mesh*> *bodies) {
 		nState.Vel.z = strtod(token, &endptr);
 
 		if (sat.maneuvers.size() == 0 && bodies != nullptr) 
-			sat.ArtSatPlan(oState, time, 3, *bodies);
+			sat.ArtSatPlan(oState, time, soi, *bodies);
 		else
-			sat.maneuvers.push_back({ oState, nState, time, name, desc });
+			sat.maneuvers.push_back({ oState, nState, time, name, desc, soi });
 		
 		token = strtok(NULL, ",");
 	}

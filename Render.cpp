@@ -116,12 +116,14 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 
 	// set light shader matrix
 // objects not in depth map will not produce shadows
-	float near_plane = 1.0f, far_plane = 17.5f; // if lightView matrix focuses on planets, FOV must be wide enough to catch moon(s)
-	glm::mat4 lightProjection = glm::ortho(-0.1f, 0.1f,
-		-0.1f, 0.1f, near_plane, far_plane);
+	float near_plane = 1.0f, far_plane = 37.5f; // if lightView matrix focuses on planets, FOV must be wide enough to catch moon(s)
+	glm::mat4 lightProjection = glm::ortho(-0.5f, 0.5f,
+		-0.5f, 0.5f, near_plane, far_plane);
 
 	int closestBody = 0;
+	int altClosest = 0;
 	float distanceToClosest = FLT_MAX;
+	float altDist = FLT_MAX;
 	// find closest planet to camera
 	for (int i = 1; i < bodies.size(); i++) {
 		if (!bodies[i]->isMoon && !bodies[i]->areRings) {
@@ -131,7 +133,17 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 				closestBody = i;
 			}
 		}
+		if (!bodies[i]->areRings && i != closestBody) {
+			float bodyDist = abs(glm::length(camera->Position - *(bodies[i]->Pos)));
+			if (altDist > bodyDist) { // vector to body
+				altDist = bodyDist;
+				altClosest = i;
+			}
+		}
 	}
+
+	if (altDist * 15 < distanceToClosest)
+		closestBody = altClosest;
 
 
 	glm::mat4 lightView = glm::lookAt( // has be based on focused body position if a focused body exists
@@ -201,10 +213,11 @@ void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
 		}
 		glBindVertexArray(quadVAO);
 		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-		glBindVertexArray(0);*/
+		glBindVertexArray(0);
+		*/
 }
 
-void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos) {
+void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos, bool showOrbit) {
 	// Every object that orbits must also have a rotate function, if it should not rotate set the first parameter to 0.0f
 	// Object will not be drawn if both functions are not present
 	
@@ -227,12 +240,13 @@ void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, do
 		}
 	}
 
+
 	for (int i = 1; i < bodies.size(); i++) {
 		for (auto lBody : lBodies) {
 			(*bodies[i]).Rotate(lBody, simTime_sec);
 			(*bodies[i]).Orbit(lBody, simTime_sec, dt, cameraPos);
 			// update and render lines
-			if (!bodies[i]->areRings) {
+			if (!bodies[i]->areRings && showOrbit) {
 				if ((*bodies[i]).bIdx == -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
 					for (int j = 0; j < (*bodies[i]).lineBufferSize; j++) {
 						(*bodies[i]).lineBuffer[j].col = (*bodies[i]).lineColor;

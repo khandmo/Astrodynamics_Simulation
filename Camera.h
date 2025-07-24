@@ -26,11 +26,12 @@ public:
 	int cameraViewCycle = 0;
 	bool focusMode = false;
 	bool lastFocusMode = false;
-	int lastFocusBody = 0;
-	int focusBody = 0;
+	int lastFocusBody = INT_MAX;
+	int focusBody = INT_MAX;
 	glm::vec3 focusPos = glm::vec3(3.0f, 0.0f, 0.0f);
 	glm::vec3 defaultFocus = glm::vec3(8.0f, 0.0f, 0.0f);
 	glm::vec3 defaultSatFocus = glm::vec3(.05f, 0, 0);
+	double focusMag = 0;
 
 	glm::vec3 Position;
 	glm::vec3 OrigPos;

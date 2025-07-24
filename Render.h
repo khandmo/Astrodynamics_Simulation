@@ -39,7 +39,7 @@ public:
 	// render shadow maps
 	void ShadowRender(std::vector<Mesh*> &bodies, Camera* camera);
 	// move bodies
-	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos);
+	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos, bool showOrbit);
 	// art sat handle
 	void ArtSatRenderAll(std::vector<ArtSat*> artSats, double simTime_sec);
 	// render skybox

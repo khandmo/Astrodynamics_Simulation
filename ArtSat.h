@@ -15,6 +15,7 @@
 #include <future>
 #include <thread>
 #include <atomic>
+#include <stack>
 
 
 // needs to be even
@@ -103,12 +104,43 @@ struct targStats {
 	double timeToCapture = 0;
 };
 // data set for maneuver
-struct maneuver { 
+struct maneuver {
 	pvUnit origState;
 	pvUnit newState;
 	double time;
 	const char* name;
 	const char* desc;
+	int soi;
+
+	maneuver(pvUnit oS, pvUnit nS, double t, const char* n, const char* d, int s)
+		: origState(oS), newState(nS), time(t), name(_strdup(n)), desc(_strdup(d)), soi(s) {}
+
+	maneuver(const maneuver& other) {
+		origState = other.origState;
+		newState = other.newState;
+		time = other.time;
+		name = _strdup(other.name);  // allocate new memory
+		desc = _strdup(other.desc);
+		soi = other.soi;
+	}
+
+	~maneuver() {
+		free((void*)name);  // cast away const for free
+	}
+
+	maneuver& operator=(const maneuver& other) {
+		if (this != &other) {
+			origState = other.origState;
+			newState = other.newState;
+			time = other.time;
+			free((void*)name);
+			name = _strdup(other.name);
+			free((void*)desc);
+			desc = _strdup(other.desc);
+			soi = other.soi;
+		}
+		return *this;
+	}
 };
 
 // finds angle between two vectors
@@ -122,9 +154,19 @@ public:
 		name = new char(strlen(other.name) + 1);
 		name = other.name;
 
-		std::copy(other.lineBuff, other.lineBuff + (LINE_BUFF_SIZE_AS * other.lineBuffSect.size()), lineBuff);
-		std::copy(other.relLB, other.relLB + (LINE_BUFF_SIZE_AS * other.lineBuffSect.size()), relLB);
-		std::copy(other.lBTime , other.lBTime + (LINE_BUFF_SIZE_AS * other.lineBuffSect.size() / 2), lBTime);
+		int fullSize = LINE_BUFF_SIZE_AS * other.lineBuffSect.size();
+		// modify buffer sizes if necessary
+		if (other.lineBuffSize > LINE_BUFF_SIZE_AS) {
+			delete[] lineBuff;
+			delete[] relLB;
+			delete[] lBTime;
+			lineBuff = new pvUnit[fullSize];
+			relLB = new vertex_t[fullSize];
+			lBTime = new double[fullSize / 2];
+		}
+		std::copy(other.lineBuff, other.lineBuff + (fullSize), lineBuff);
+		std::copy(other.relLB, other.relLB + (fullSize), relLB);
+		std::copy(other.lBTime , other.lBTime + (fullSize / 2), lBTime);
 
 		lineBuffSize = other.lineBuffSize;
 		lB_size_actual = other.lB_size_actual;
@@ -141,8 +183,8 @@ public:
 		sysThread = other.sysThread;
 		threadStop = other.threadStop;
 		soi_ing = other.soi_ing;
+		mtxSat = other.mtxSat;
 		
-		pathDevice = geom_shdr_lines_init_device();
 		state = new pvUnit(*other.state);
 		stateButChanged = new pvUnit(*other.stateButChanged);
 		apoapsis = new poi(*other.apoapsis);
@@ -168,20 +210,22 @@ public:
 	// holds lineBuff index of change and soiIdx of new body
 	std::vector<std::pair<int,int>> soiNodes;
 	// struct for openGL line rendering
-	geom_shader_lines_device_t* pathDevice = nullptr;
+	geom_shader_lines_device_t* pathDevice = geom_shdr_lines_init_device();
 	// handles amt of relLB nodes rendered
 	int lB_size_actual = -1;
 	// true if satellite currently exists at sim time
 	bool inTime = true;
-	// different sections for different soi's / future orbits
+	// orbit sections in sequential order with soi, node # pairs
 	std::vector<std::pair<int, int>> lineBuffSect;
+	std::stack<int> trajTransitions;
 	
 	// dynamic sets for prelim lineBuff and lBTime
 	std::vector <pvUnit>* dynBuff = nullptr;
 	std::vector <double>* dynTimes = nullptr;
 
-	// state rel to soiIdx in km, scaled to sim, current sim time, IDK
+	// state rel to soiIdx in km
 	pvUnit* state = nullptr;
+	// state rel to soiIdx in soiChanged units
 	pvUnit* stateButChanged = nullptr;
 	double stateTime;
 	glm::vec3 simPos = { 0, 0, 0 };
@@ -210,10 +254,10 @@ public:
 	std::future<void> *sysThread = nullptr;
 	std::atomic<bool> *threadStop = nullptr;
 	std::atomic<bool> *soi_ing = new std::atomic<bool>(false);
+	std::mutex* mtxSat = nullptr;
 	bool fxnStop = false;
 	bool escaping = false;
 	bool isCopy = false;
-	bool fastChart = false;
 	bool planning = false;
 	
 	pvUnit* prevPV = nullptr;
@@ -227,17 +271,15 @@ public:
 
 	void ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double dt, const char name[30], const char desc[30]);
 
-	void ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int tW, double mod);
+	void ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int &tW, double mod);
 
 	void ArtSatRender(Camera* camera, Mesh lightSource);
 
 	~ArtSat();
 
-	void chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt);
+	void chartTraj(pvUnit pv, std::vector<Mesh*> bodies, double dt, int altSoi);
 
-	void fillBuff(std::vector<pvUnit>* dynBuff, std::vector<double>* dynTime, int mod);
-
-	void soiHandle(std::vector<Mesh*> bodies, double dt);
+	void fillBuff(int mod);
 
 	void chartApproach(std::vector<Mesh*> bodies, int targetID);
 

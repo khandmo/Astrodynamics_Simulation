@@ -17,10 +17,8 @@ GUI::GUI(GLFWwindow* window, GUIData guiData) {
 	bodyNames = new const char*[guiData.Sys->bodies.size()]; // delete this in deconstructor
 	int counter = 0;
 	for (auto& body : guiData.Sys->bodies) {
-		if (!body->areRings) {
-			bodyNames[counter] = body->name;
-			counter++;
-		}
+		bodyNames[counter] = body->name;
+		counter++;
 	}
 	bodyNamesLen = counter;
 
@@ -32,6 +30,7 @@ GUI::GUI(GLFWwindow* window, GUIData guiData) {
 	}
 	satNamesLen = counter;
 	
+	manStopBool = &(guiData.Sys->satManStop);
 }
 
 void GUI::guiLoopStart(GUIData guiData) {
@@ -80,6 +79,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 		ImGui::End();
 		return;
 	}
+
 	ImGui::SeparatorText("TIME CONTROL");
 	float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
 	ImGui::Text("Time Warp");
@@ -97,8 +97,13 @@ void GUI::guiLoopADS(GUIData guiData) {
 	if (ImGui::Button("Kill TimeWarp"))
 		*(guiData.tW) = 15;
 	ImGui::SameLine();
-	if (ImGui::Button("Warp To System Time"))
-		guiData.Sys->ArgClockSet(1746894552);
+	if (ImGui::Button("Warp To System Time")) {
+		guiData.Sys->ArgClockSet(guiData.Sys->sysTime.time_in_sec);
+	}
+	ImGui::SameLine();
+	if (ImGui::Checkbox("Show Orbits", &orbitShow)) {
+		
+	}
 
 
 
@@ -172,6 +177,8 @@ void GUI::guiLoopADS(GUIData guiData) {
 		// focus sat info - apo/peri, time to each, MET, orbital period, maneuver info, maneuver button, refresh button
 		if (currSat->stat != nullptr) {
 			ImGui::Text("Altitude: %.2f km", currSat->stat->distToSoi);
+			ImGui::SameLine();
+			ImGui::Text("Velocity: %.2f m/s^2", glm::length(currSat->state->Vel));
 			ImGui::Text("Apoapsis: %.2f km", currSat->stat->apoapsis);
 			ImGui::Text("\tT%s", secToDay(currSat->stat->timeToApo));
 			ImGui::Text("Periapsis: %.2f km", currSat->stat->periapsis);
@@ -185,6 +192,17 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 		if (ImGui::Button("Target")) {
 			targetWin = !targetWin;
+		}
+
+		ImGui::SameLine();
+
+		if (ImGui::Button("Refresh Orbit") && currSat->inTime) {
+			currSat->refreshTraj(guiData.Sys->bodies, *guiData.simTime);
+		}
+		if (ImGui::IsItemHovered()) {
+			ImGui::BeginTooltip();
+			ImGui::TextUnformatted("Runs trajectory chart");
+			ImGui::EndTooltip();
 		}
 
 		if (targetWin) {
@@ -213,7 +231,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 			}
 
 			// handle target focus
-			if (targetFocus && guiData.Sys->camera->focusBody < 0) {
+			if (targetFocus && guiData.Sys->camera->focusBody < 0 && someSat->targStat != nullptr) {
 				lastFocus = guiData.Sys->camera->focusBody;
 				guiData.Sys->camera->focusBody = someSat->targStat->targetIdx;
 			}
@@ -319,15 +337,18 @@ void GUI::guiLoopADS(GUIData guiData) {
 		// maneuver stats
 		if (showMan) {
 			ImGui::Combo("->", &manListCurr, manList, manListLen);
-			ImGui::SameLine();
-			if (ImGui::Button("Go-To")) {
-				goToManTime = currSat->maneuvers[manListCurr].time;
+			if (currSat->maneuvers.size() > manListCurr) {
+				ImGui::SameLine();
+				if (ImGui::Button("Go-To")) {
+					goToManTime = currSat->maneuvers[manListCurr].time;
+					currSat->ArtSatUpdState(guiData.Sys->bodies, goToManTime, *guiData.tW, 1);
+					currSat->lastEphTime = goToManTime;
+				}
+
+				ImGui::Text("%s", currSat->maneuvers[manListCurr].desc);
+				ImGui::Text("deltaV: %.2f m/s", glm::length(currSat->maneuvers[manListCurr].newState.Vel - currSat->maneuvers[manListCurr].origState.Vel) * 1000);
+				ImGui::Text("Burn in T%s", secToDay(currSat->maneuvers[manListCurr].time - *guiData.simTime));
 			}
-
-			ImGui::Text("%s", currSat->maneuvers[manListCurr].desc);
-			ImGui::Text("deltaV: %.2f m/s", glm::length(currSat->maneuvers[manListCurr].newState.Vel - currSat->maneuvers[manListCurr].origState.Vel) * 1000);
-			ImGui::Text("Burn in T%s", secToDay(currSat->maneuvers[manListCurr].time - *guiData.simTime));
-
 		}
 
 		ImGui::SameLine();
@@ -341,15 +362,30 @@ void GUI::guiLoopADS(GUIData guiData) {
 			}
 			else {
 				newMan = true;
-				newManDt = *guiData.simTime + (60 * 5);
+				newManDt = *guiData.simTime + (60 * 2);
 				copySat = new ArtSat(*currSat);
 				copySat->isCopy = true;
 			}
 
 		}
 
-		if (ImGui::Button("Refresh Orbit") && currSat->inTime) {
-			currSat->refreshTraj(guiData.Sys->bodies, *guiData.simTime);
+		if (ImGui::Button("Save") && !newMan) {
+			// System fxn to save a sat
+			guiData.Sys->sat2Persist(*currSat, true);
+		}
+		if (ImGui::IsItemHovered()) {
+			ImGui::BeginTooltip();
+			ImGui::TextUnformatted("Saves satellite data into persistent memory \n (won't save if maneuvering)");
+			ImGui::EndTooltip();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Delete")) {
+			guiData.Sys->sat2Persist(*currSat, false);
+		}
+		if (ImGui::IsItemHovered()) {
+			ImGui::BeginTooltip();
+			ImGui::TextUnformatted("Deletes satellite data from persistent memory if there");
+			ImGui::EndTooltip();
 		}
 
 
@@ -363,8 +399,13 @@ void GUI::guiLoopADS(GUIData guiData) {
 			ImGui::InputText("Description", str1, IM_ARRAYSIZE(str1));
 
 			ImGui::Checkbox("Fine Control", &fineCtrl);
+			if (ImGui::IsItemHovered()) {
+				ImGui::BeginTooltip();
+				ImGui::TextUnformatted("Modify slider bounds for small adjustment");
+				ImGui::EndTooltip();
+			}
 			ImGui::SameLine();
-			ImGui::Checkbox("Retrograde Burn", &retrograde);
+			ImGui::Checkbox("Retrograde", &retrograde);
 
 			/*
 			if (ImGui::Button("- Test Man -")) {
@@ -381,6 +422,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 			else if (!fineCtrl && fineCtrlData != glm::vec3{ 0, 0, 0 }) {
 				fineCtrlData = glm::vec3{ 0, 0, 0 };
 			}
+
 
 			ImGui::SliderFloat("Time", &manDt, 0, currSat->stat->orbitalPeriod, "%.f s");
 			ImGui::SameLine();
@@ -443,13 +485,13 @@ void GUI::guiLoopADS(GUIData guiData) {
 			// if maneuver changed do new calculation
 			if (oldManDt != manDt || oldManData != manData) {
 				// handle thread atomic bool
-				manStopBool.store(true);
+				manStopBool->store(true);
 				while (guiData.Sys->maneuverThread.valid()) { // make sure thread is dead
 					if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
 						guiData.Sys->maneuverThread.get();
 					}
 				}
-				manStopBool.store(false);
+				manStopBool->store(false);
 
 				// transplant target, remake copySat
 				targStats copyTS; copyTS.targetIdx = -1;
@@ -469,9 +511,9 @@ void GUI::guiLoopADS(GUIData guiData) {
 				// fill up temp buffer for early render
 				if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
 					if (!(copySat->soi_ing->load()) && !(copySat->escaping)) // checking if going to other soi (moon) or has escaped -- what does soi_ing have to do w/ fillBuff here?
-						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 0); // bounded orbit
+						copySat->fillBuff(0); // bounded orbit
 					else
-						copySat->fillBuff(copySat->dynBuff, copySat->dynTimes, 1); // escape check / escape
+						copySat->fillBuff(1); // escape check / escape
 				}
 				else {
 					// or if done processing empty thread
@@ -496,14 +538,25 @@ void GUI::guiLoopADS(GUIData guiData) {
 				manData[0] = -manData[0];
 			// save maneuver
 			if (ImGui::Button("Save Maneuver")) {
+				if (strcmp(str1, "\0") == 0) {
+					strcpy(str1, "?\0");
+				}
 				currSat->maneuvers.push_back({ (copySat->maneuvers[copySat->maneuvers.size() - 1].origState),
-					(copySat->maneuvers[copySat->maneuvers.size() - 1].newState), newManDt + manDt, str0, str1 });
+					(copySat->maneuvers[copySat->maneuvers.size() - 1].newState), newManDt + manDt, str0, str1, copySat->soiIdx });
 				delete copySat;
 				copySat = nullptr;
 				manDt = 0;
+				oldManDt = manDt;
 				manData = { 0, 0, 0 };
+				oldManData = manData;
 				newMan = false;
 			}
+		}
+		else if (manDt != 0 || oldManDt != 0) {
+			manDt = 0;
+			oldManDt = manDt;
+			manData = { 0, 0, 0 };
+			oldManData = manData;
 		}
 	}
 
@@ -514,11 +567,15 @@ void GUI::guiLoopADS(GUIData guiData) {
 
 	
 	if (ImGui::Button("New Artificial Satellite")) {
-		newArtSat = true;
-		sat = new ArtSat();
-		pv = new pvUnit;
-		sat->sysThread = &guiData.Sys->maneuverThread;
-		sat->threadStop = &manStopBool;
+		if (newArtSat) {}
+		else {
+			newArtSat = true;
+			sat = new ArtSat();
+			pv = new pvUnit;
+			sat->sysThread = &guiData.Sys->maneuverThread;
+			sat->threadStop = &guiData.Sys->satManStop;
+			sat->mtxSat = &guiData.Sys->mtxSat;
+		}
 	}
 	if (newArtSat) { // new satellite logic
 
@@ -572,9 +629,9 @@ void GUI::guiLoopADS(GUIData guiData) {
 			// fill up temp buffer for early render
 			if (guiData.Sys->maneuverThread.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
 				if (!(sat->soi_ing->load()))
-					sat->fillBuff(sat->dynBuff, sat->dynTimes, 0);
+					sat->fillBuff(0);
 				else
-					sat->fillBuff(sat->dynBuff, sat->dynTimes, 1);
+					sat->fillBuff(1);
 			}
 			else {
 				// or if done processing empty thread

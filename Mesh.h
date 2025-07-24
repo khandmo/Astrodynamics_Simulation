@@ -24,7 +24,7 @@
 #define REF_LIST_SIZE_U 41 // must be odd
 #define REF_LIST_SIZE (REF_LIST_SIZE_U * 2)
 
-struct Camera;
+class Camera;
 struct pvUnit;
 /*
 Mesh holds all physical data about an object including the model data, whether or not it is a light source or a ring system,
@@ -146,7 +146,7 @@ public:
 	// return functions to call for attributes below
 
 	// returns NASA (km) position/velocity wrt Solar System barycenter at a given time
-	pvUnit getPV(double time, bool stateChanged, bool rotated);
+	pvUnit getPV(double time, bool stateChanged);
 	
 };
 

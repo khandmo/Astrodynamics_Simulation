@@ -265,8 +265,8 @@ void Mesh::AxialTilt(GLfloat tiltDeg) {
 	poleVec = glm::rotateY(poleVec, glm::radians(-23.4f)); // north pole vector in correct frame
 
 
-	Model = glm::rotate(Model, -glm::radians(tiltDeg), poleVec);
-	axisTiltDegree = -tiltDeg;
+	Model = glm::rotate(Model, glm::radians(tiltDeg), poleVec);
+	axisTiltDegree = tiltDeg;
 }
 
 void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3 cameraPos) {
@@ -496,7 +496,7 @@ Mesh::~Mesh() {
 	my_EBO = nullptr;
 }
 */
-pvUnit Mesh::getPV(double time, bool stateChanged, bool rotated) { // *** add boolean for state change version instead
+pvUnit Mesh::getPV(double time, bool stateChanged) { // *** add boolean for state change version instead
 	std::lock_guard<std::mutex> lock(*spiceMtx);
 
 	SpiceDouble state[6];
@@ -523,7 +523,7 @@ void Mesh::updateModel(Mesh& source) {
 	glm::mat4 objModel = glm::mat4(1.0f);
 	Model = glm::translate(objModel, *Pos);
 
-	Model = glm::rotate(Model, glm::radians(axisTiltDegree), poleVec);
+	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::cross(Up, poleVec));
 	Model = glm::rotate(Model, currAngleRad, Up);
 }
 

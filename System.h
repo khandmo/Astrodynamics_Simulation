@@ -25,6 +25,7 @@ struct state {
 	char* date;
 	glm::vec3 pos;
 	glm::vec3 vel;
+	int soi;
 };
 
 class System {
@@ -49,6 +50,9 @@ public:
 	std::future<void> twThread;
 	std::mutex mtx;
 	std::mutex mtxT;
+	std::mutex mtxSat;
+
+	std::atomic<bool> satManStop = false;
 
 
 	Shader dS = Shader("default.vert", "default.frag");
@@ -66,6 +70,8 @@ public:
 	time_block sysTime;
 	time_block simTime;
 
+	const char* persistent_memory_address;
+
 	// intializer
 	System(); // initializes main bodies, shaders / saved game?
 
@@ -73,13 +79,16 @@ public:
 	Mesh initBody(const char* name, const char* texFilePath, float mass, float radius, float outerRadius, float axialTilt, bool isLight, bool areRings, const char* soiID, int baryID, int spiceID, float orbPeriod);
 
 	// generates real missions based on ephemeris data
-	void initSat(const char* name, const char* eph, const char* prstnt);
+	void initSat(const char* name, const char* eph);
 
 	// loads sats already saved in persistent memory file
 	void initPersistSats(const char* file);
 
+	// add user generated sat to persistent memory file
+	bool sat2Persist(ArtSat sat, bool add);
+
 	// passive satellite handling
-	void ArtSatHandle(Camera* camera, double dt, int tW);
+	void ArtSatHandle(Camera* camera, double dt, int &tW);
 
 	void updateBodyState(); // handles input during application run-time
 

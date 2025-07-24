@@ -26,6 +26,10 @@ Marker::Marker(int type, float size, glm::vec3 fixedPos, glm::vec3 corr) {
     const char* vert = sVert.c_str();
     const char* frag = sFrag.c_str();
 
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        printf("GL Error before shader creation: %d\n", err);
+    }
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vert, NULL);
     glCompileShader(vertexShader);
@@ -40,6 +44,7 @@ Marker::Marker(int type, float size, glm::vec3 fixedPos, glm::vec3 corr) {
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
+    err = glGetError();
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 

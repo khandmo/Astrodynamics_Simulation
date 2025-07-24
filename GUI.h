@@ -72,7 +72,8 @@ public:
 	glm::vec3 oldManData = manData;
 	glm::vec3 fineCtrlData = { 0, 0, 0 };
 
-	std::atomic<bool> manStopBool = false;
+	std::atomic<bool>* manStopBool;
+	bool orbitShow = true;
 	
 	float newManDt = 0;
 	float oldManDt = 0;
