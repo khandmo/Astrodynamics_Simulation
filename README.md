@@ -53,11 +53,11 @@ WASD - Movement<br>
 Space - Vertical Up movement<br>
 Control - Vertical Down movement<br>
 Shift - Increase speed in any direction<br>
+C - Decrease speed in any direction<br>
 Left Mouse Hold - Moves the camera in any direction<br>
 
 #### Focus Mode:
-W - Zoom in<br>
-S - Zoom out<br>
+Scroll wheel - Zoom <br>
 A/D - Change focus body<br>
 Left Mouse Hold - Revolve around focus body<br>
 
