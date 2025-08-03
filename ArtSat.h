@@ -19,11 +19,11 @@
 
 
 // needs to be even
-#define LINE_BUFF_SIZE_AS 300
+#define LINE_BUFF_SIZE_AS 500
 // yoshida coefficients
 #define yw0 (-cbrt(2) / (2 - cbrt(2)))
 #define yw1 (1 / (2 - cbrt(2)))
-#define tW_thresh 24
+#define tW_thresh 23
 
 
 struct vertex;
@@ -244,6 +244,7 @@ public:
 
 	// data for sat marker, close approach markers
 	Marker* satVis = nullptr;
+	int mk1Soi = -1;
 	Marker* mk1 = nullptr;
 	Marker* mk2 = nullptr;
 

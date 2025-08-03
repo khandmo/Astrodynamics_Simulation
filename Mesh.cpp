@@ -288,11 +288,10 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	(*spiceMtx).unlock();
 
 	stateChange(state);
-	glm::vec3 tempPos= glm::vec3(state[0], state[1], state[2]);
+	glm::dvec3 tempPos= glm::vec3(state[0], state[1], state[2]);
 	if (isMoon && gravSource->Pos != nullptr) tempPos += *(gravSource->Pos); 
 	
 	*Pos = tempPos;
-
 	// if object are rings, meshes normals must be flipped when the sun crosses the ring plane (z-axis turning points)
 	if (areRings) { // below assumes the starting position is at z = 0
 		if (Pos->z > 0 && !sign) {

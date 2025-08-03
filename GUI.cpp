@@ -178,7 +178,7 @@ void GUI::guiLoopADS(GUIData guiData) {
 		if (currSat->stat != nullptr) {
 			ImGui::Text("Altitude: %.2f km", currSat->stat->distToSoi);
 			ImGui::SameLine();
-			ImGui::Text("Velocity: %.2f m/s^2", glm::length(currSat->state->Vel));
+			ImGui::Text("Velocity: %.2f km/s", glm::length(currSat->state->Vel));
 			ImGui::Text("Apoapsis: %.2f km", currSat->stat->apoapsis);
 			ImGui::Text("\tT%s", secToDay(currSat->stat->timeToApo));
 			ImGui::Text("Periapsis: %.2f km", currSat->stat->periapsis);
@@ -251,12 +251,23 @@ void GUI::guiLoopADS(GUIData guiData) {
 				}
 
 				someSat->targStat->soiRad = guiData.Sys->bodies[someSat->targStat->targetIdx]->soiRadius;
+				if (someSat->targStat->closeAppr - someSat->targStat->soiRad < 0 && someSat->targStat->targetIdx != 0) {
+					someSat->targStat->soiCapture = true;
+					int nodeAcc = 0;
+					for (int i = 0; i < someSat->lineBuffSect.size(); i++) {
+						if (someSat->lineBuffSect[i].first == someSat->targStat->targetIdx) {
+							if (i != 0) i--;
+							someSat->targStat->timeToCapture = someSat ->lBTime[(((LINE_BUFF_SIZE_AS * (i)) + someSat->lineBuffSect[i].second) / 2) - 2] - *(guiData.simTime);
+							break;
+						}
+					}
+				}
 
 				ImGui::Text("Closest Approach: %.2f km", someSat->targStat->closeAppr);
 				ImGui::Text("\tT%s", secToDay(someSat->targStat->timeToCloseAppr));
 
 				if (someSat->targStat->soiCapture)
-					ImGui::Text("Capture in T%s", secToDay(someSat->targStat->timeToCapture));
+					ImGui::Text("Capture in T%s", secToDay(someSat->targStat->timeToCapture)); // does not compute
 				else
 					ImGui::Text("Capture Miss: %.2f km", someSat->targStat->closeAppr - someSat->targStat->soiRad);
 
@@ -295,6 +306,11 @@ void GUI::guiLoopADS(GUIData guiData) {
 					ImGui::SameLine();
 					if (ImGui::Button("Warp To") && transferTime != -1) {
 						guiData.Sys->ArgClockSet(transferTime);
+						currSat->stateTime = transferTime;
+						if (copySat != nullptr) {
+							copySat->stateTime = transferTime;
+							newManDt = transferTime + (60 * 2);
+						}
 					}
 
 					if (transfer != lastT) {
@@ -392,7 +408,15 @@ void GUI::guiLoopADS(GUIData guiData) {
 		if (newMan) { // maneuver logic
 
 			// should not use static here
-			static char str0[30] = "maneuver 1"; // modify to tick up with amt of maneuvers
+
+			// use the number of maneuvers after launch (total size - 1) to append the below string
+			int manNum = currSat->maneuvers.size();
+			char manNumStr[4];
+			snprintf(manNumStr, (int)((ceil(log10(manNum)) + 1) * sizeof(char)), "%d", manNum);
+
+			static char str0[30] = "maneuver "; // modify to tick up with amt of maneuvers
+			if (strcmp(str0, "maneuver ") == 0)
+				strcat(str0, manNumStr);
 			ImGui::InputText("Name", str0, IM_ARRAYSIZE(str0));
 
 			static char str1[30] = "";
@@ -407,12 +431,14 @@ void GUI::guiLoopADS(GUIData guiData) {
 			ImGui::SameLine();
 			ImGui::Checkbox("Retrograde", &retrograde);
 
-			/*
+			
 			if (ImGui::Button("- Test Man -")) {
-				manDt = 868;
-				manData[0] = 3.78;
+				manDt = 1801759782 - *(guiData.simTime);
+				manData[0] = .597609997;
+				manData[1] = -.00940000266;
+				manData[2] = .00259999558;
 			}
-			*/
+			
 
 
 			manData[0] *= 1000; // have to move this above fineCtrl copy
@@ -719,7 +745,7 @@ void arrowToggle(float& value, bool isInt, bool fineCtrl) {
 	else
 		inc = 0.01;
 	if (fineCtrl)
-		inc /= 4;
+		inc /= 50;
 	ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true);
 	if (ImGui::ArrowButton(std::to_string(rand()).c_str(), ImGuiDir_Left)) { value -= inc; }
 	ImGui::SameLine();

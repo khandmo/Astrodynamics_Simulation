@@ -88,8 +88,8 @@ int main() {
 
 	// set skybox and time float
 	bool skyboxOn = true;
-	int dtRange[31] = { -10000000, -100000, -50000, -20000, -10000, -5000, -2000, -1000, -500, -200, -100, -64, -4, -2, -1, 0, 
-		1, 2, 4, 64, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 10000000}; // fixed time warp range -10mil to 10mil
+	int dtRange[31] = { -1000000, -500000, -100000, -50000, -20000, -10000, -5000, -2000, -1000, -500, -200, -100, -50, -10, -1, 0, 
+		1, 10, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000}; // fixed time warp range -1mil to 1mil
 	int dt = 16; // current time warp index 
 	bool dtChange = false;
 	float clickPTime = glfwGetTime();

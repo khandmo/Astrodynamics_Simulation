@@ -64,6 +64,7 @@ System::System() {
 	for (int i = 0; i < bodiesActual.size(); i++) {
 		bodies.push_back(&bodiesActual[i]);
 		bodies[i]->spiceMtx = &mtx;
+		bodies[i]->idx_int = i;
 		if (bodies[i]->isLightSource) {
 			lightBodies.push_back(bodies[i]);
 		}
@@ -86,8 +87,7 @@ System::System() {
 	// init art sats
 	// program to take artSats and name of ephemeris data, process and add mission + maneuver to persistent memory
 	initPersistSats("persistent_sats.txt");
-	//initSat("Artemis 1", "hr_artemis_1.txt");
-	//initSat("JWST", "hr_jwst.txt");
+	initSat("Artemis 1", "hr_artemis_1.txt");
 
 	// time memory save
 	sysTime = *(time_block*) malloc(sizeof(time_block));
@@ -404,7 +404,7 @@ void System::updateBodyState() { // System holds it's own positions, gets update
 		Object obj;
 		bool change = false;
 		float apparent_size = abs(glm::length(camera->Position - *bodyPos[i])) / bodies[i]->radius;
-		if (apparent_size < 300) {
+		if (apparent_size < 600) {
 			if (bodies[i]->vertices.size() < 50) { // if box and shouldn't be
 				change = true;
 				obj.Sphere(bodies[i]->radius);
@@ -536,7 +536,8 @@ double System::hohmannCalc(int b1, int b2, double dt, double& synT) {
 
 	w1 = sqrt(mu / pow(r1, 3)); w2 = sqrt(mu / pow(r2, 3));
 
-	phase = glm::pi<double>() - ((w1 - w2) * tTime);
+	phase = (w2 * tTime);
+	phase = glm::pi<double>() - std::fmod(phase, 2 * glm::pi<double>());
 
 	// compute current phase
 	double currPhase = acos(glm::dot(r1V, r2V) / (r1 * r2)), cross = glm::cross(r1V, r2V).z;
@@ -547,6 +548,8 @@ double System::hohmannCalc(int b1, int b2, double dt, double& synT) {
 	double tt = (phase - currPhase) / (w2 - w1);
 
 	synT = (2 * glm::pi<double>()) / (w1 - w2);
+
+	if (tt < 0) tt += synT;
 
 	return dt + tt;
 }

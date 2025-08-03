@@ -52,6 +52,7 @@ public:
 	Mesh* gravSource = nullptr; // body whose SOI this body is currently in / body which exerts the greatest grav field on body in solar system
 	const char* soiID; // sphere of influence identification for 2 body equations and for "isMoon" flag / if soiID != 0
 	const char* soiIdx;
+	int idx_int = -1;
 	int spiceID = -1;
 	int baryID = -1;
 	float orbitalPeriod = -1;

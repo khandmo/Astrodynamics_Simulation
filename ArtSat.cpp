@@ -103,7 +103,7 @@ int ArtSat::ArtSatPlan(pvUnit pv, double dt, int soiIndex, std::vector <Mesh*> b
 void ArtSat::ArtSatManeuver(glm::vec3 deltaV, std::vector <Mesh*> bodies, double dt, const char name[30], const char desc[30]) {
 	// might need to check for past-orbit nodes
 	int i = 0;
-	while (1) { // is this bad code?
+	while (i < LINE_BUFF_SIZE_AS / 2) { // is this bad code?
 		if (lBTime[i] > dt) {
 			i--;
 			break;
@@ -147,7 +147,7 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int &tW, doub
 		// if i put sat death on last maneuver then i can check here for inTime
 		// if EOM found it should update the save file, the second argument here just says if its been over 1 day since the last time it was updated then assume its dead
 		// rigorous method would not update unless prompted and run it on the thread until it's eom or otherwise
-		if (dt + 5 < maneuvers[0].time || lastEphTime != -1 && abs(dt - lastEphTime) > 60 * 60 
+		if (dt + 5 < maneuvers[0].time || lastEphTime != -1 && abs(dt - lastEphTime) > 60 * 60 && abs(dt - stateTime) > 60 * 60 * 48 && !isCopy
 			|| maneuvers[maneuvers.size() - 1].newState == pvUnit{ glm::dvec3(0,0,0), glm::dvec3(0,0,0) } && dt > maneuvers[maneuvers.size() - 1].time) { // mod is -1 at art sat creation
 			inTime = false;
 			simPos = glm::vec3(0,0,0);
@@ -228,20 +228,12 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int &tW, doub
 				chartApproach(bodies, targStat->targetIdx);
 			}
 			else if (mk1 != nullptr) {
-				mk1->corrPos = *bodies[soiIdx]->Pos;
+				mk1->corrPos = *bodies[mk1Soi]->Pos;
 				if (targStat != nullptr && bodies[targStat->targetIdx]->isMoon)
 					mk2->corrPos = *bodies[targStat->targetIdx]->gravSource->Pos;
 			}
 			if (satVis == nullptr) {
 				satVis = new Marker(1, 1, (glm::vec3)stateButChanged->Pos, *bodies[soiIdx]->Pos);
-			}
-			// refresh orbit at soi change
-			int lastSoi = soiIdx;
-			if (!isCopy && soiDetector(bodies, state->Pos, stateTime, &soiIdx, -1)) {
-				*state = translatePV(*state, bodies, stateTime, lastSoi, soiIdx);
-				mtxSat->unlock();
-				refreshTraj(bodies, stateTime);
-				mtxSat->lock();
 			}
 
 			// handle state update on time jump, get close quick with orbit nodes
@@ -278,16 +270,25 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int &tW, doub
 							timeSln--;
 					}
 				}
-				if (i < 0) i = 0; // error bandaid
-				if (i >= LINE_BUFF_SIZE_AS * 50) i = LINE_BUFF_SIZE_AS - 1;
 				i = timeSln;
-				lBpv = lineBuff[i * 2];
+				if (i == (LINE_BUFF_SIZE_AS / 2) - 1) i--;
+
+				lBpv = lineBuff[((i+1) * 2) + 1] - lineBuff[(i * 2) + 1];
+
+				float timeFrac = (dt - lBTime[i]) / (float)(lBTime[i + 1] - lBTime[i]);
+				lBpv.Pos *= timeFrac;
+				lBpv.Vel *= timeFrac;
+
+				lBpv = lBpv + lineBuff[(i * 2) + 1];
+
 				invStateChange(&lBpv.Pos, &lBpv.Vel);
 
 				*state = lBpv;	
-				lastTime = lBTime[i];
+				lastTime = dt;
+				// going backwards should use this method as well, the maneuver check up top should take care of this shit under here
+
 			}
-			else if (tW < 6) { // going backwards
+			else if (tW < 7) { // going backwards
 				manJump = 1;
 				int j = 0;
 				while (j < maneuvers.size() - 1) {
@@ -305,8 +306,8 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int &tW, doub
 				soiIdx = maneuvers[j].soi;
 			}
 			// once have closest orbit node, integrate to curr time
-			float timeStep = std::max(1.0f, (float)stat->orbitalPeriod / 100000);
-			if (tW >= tW_thresh || dt - lastTime > 60 * 60 * 24) timeStep = stat->orbitalPeriod / 50000; // should use thread past this threshold, greater than 1000x
+			float timeStep = std::max(1.0f, (float)(abs(dt - lastTime) / 20));
+			if (tW >= tW_thresh || dt - lastTime > 60 * 60 * 24) timeStep = (float)(abs(dt - lastTime) / 40); // should use thread past this threshold, greater than 1000x
 			if (tW < 15) timeStep = -timeStep;
 
 			while (lastTime < dt && tW <= tW_thresh) { // less than or equal to 2000x @ thresh 24
@@ -328,6 +329,15 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int &tW, doub
 			*stateButChanged = *state;
 			stateChange(&(stateButChanged->Pos), &(stateButChanged->Vel));
 			stateTime = dt;
+
+			// refresh orbit at soi change
+			int lastSoi = soiIdx;
+			if (!isCopy && soiDetector(bodies, state->Pos, stateTime, &soiIdx, -1)) {
+				*state = translatePV(*state, bodies, stateTime, lastSoi, soiIdx);
+				mtxSat->unlock();
+				refreshTraj(bodies, stateTime);
+				mtxSat->lock();
+			}
 
 
 			ArtSat::simPos = (glm::vec3)stateButChanged->Pos + *(bodies[soiIdx]->Pos);
@@ -400,9 +410,7 @@ void ArtSat::ArtSatUpdState(std::vector <Mesh*> bodies, double dt, int &tW, doub
 void ArtSat::ArtSatRender(Camera* camera, Mesh lightSource) {
 	if (inTime) {
 		mtxSat->lock();
-		double main = vecMag(relLB[0].pos) - vecMag(relLB[1].pos);
-		double next = vecMag(relLB[2].pos) - vecMag(relLB[3].pos);
-		double diff = main - next;
+
 		// render lineBuff
 		uniform_data_t uni;
 		glm::mat4 mvp = camera->cameraMatrix * glm::mat4(1.0); // mult 4x4 glm - non zero, should check shader
@@ -794,45 +802,72 @@ void ArtSat::fillBuff(int mod) {
 
 void ArtSat::chartApproach(std::vector<Mesh*> bodies, int targetID) {
 
-	double prelimDist = INT_MAX, dist = INT_MAX, dummy = 0;
+	double prelimDist = FLT_MAX, dist = FLT_MAX, dummy = 0;
 	int closestNode = 0;
-
+	pvUnit compareUnit;
 
 	// loop through LB time and find closest pt in orbit to planet, then march back one pt and iterate to get the exact pt
-	for (int i = 0; i < (lineBuffSect.size() * LINE_BUFF_SIZE_AS) - 2;) { // only searches x * lbsz pts
-		double dummyDist = distanceFind(lineBuff[i].Pos, bodies[targetID]->getPV(lBTime[i/2], true).Pos);
+	int j = 0, k = 0, acc = 0, closestSoi = 0;
+	for (int i = 0; i < lineBuffSize - 2;) { // only searches x * lbsz pts
+		if (i > acc + lineBuffSect[j].second) {
+			acc += lineBuffSect[j].second;
+			k += LINE_BUFF_SIZE_AS - lineBuffSect[j].second; // correction factor to bridge zerod buffer
+			j++;
+		}
+
+		compareUnit = lineBuff[i];
+		invStateChange(&compareUnit.Pos, &compareUnit.Vel);
+
+		if (targetID != 0 && lineBuffSect[j].first != bodies[targetID]->gravSource->idx_int) {
+			compareUnit = translatePV(compareUnit, bodies, lBTime[(i + k) / 2], lineBuffSect[j].first, bodies[targetID]->gravSource->idx_int);
+		}
+		double dummyDist = distanceFind(compareUnit.Pos, bodies[targetID]->getPV(lBTime[(i+k)/2], false).Pos);
+
 		if (dummyDist < prelimDist) {
 			prelimDist = dummyDist;
 			closestNode = i;
+			closestSoi = lineBuffSect[j].first;
 		}
 		i += 2;
 	}
+	if (closestNode <= 2) closestNode = 2;
 
-	dist = INT_MAX;
 	pvUnit pv = lineBuff[closestNode - 2], pvb4 = pv;
 	invStateChange(&(pv.Pos), &(pv.Vel));
 	double time = lBTime[(closestNode - 2) / 2];
 	double timeStep = 10.0;
 
 	while (1) {
-		updatePV(&pv, bodies, soiIdx, time, timeStep, dummy);
-		double dummyDist = distanceFind(pv.Pos, bodies[targetID]->getPV(time + timeStep, false).Pos);
-		if (dummyDist < dist) {
-			dist = dummyDist;
+		updatePV(&pv, bodies, closestSoi, time, timeStep, dummy);
+
+		compareUnit = pv;
+		if (lineBuffSect[j].first != bodies[targetID]->gravSource->idx_int) {
+			compareUnit = translatePV(compareUnit, bodies, time + timeStep, closestSoi, bodies[targetID]->gravSource->idx_int);
+		}
+		// pv is not comparable to getPV if the soi isn't the sun, but what happens to pv for moons
+
+		double dummyDist = distanceFind(compareUnit.Pos, bodies[targetID]->getPV(time + timeStep, false).Pos);
+		if (dummyDist > dist) {
 			break;
 		}
+
 		dist = dummyDist;
 		time += timeStep;
 		pvb4 = pv;
-		if (time > lBTime[(closestNode - 2) / 2]) { // lazy error fixing
+		if (time > lBTime[((closestNode - 2) / 2) + 1] || time < lBTime[(closestNode - 2) / 2]) { // lazy error fixing
 			dist = prelimDist;
 			time = lBTime[(closestNode - 2) / 2];
 			break;
 		}
 
 	}	
+	stateChange(&pvb4.Pos, &pvb4.Vel);
 
-	mk1 = new Marker(0, 1, (glm::vec3)pvb4.Pos, *(bodies[soiIdx]->Pos));
+	mk1Soi = closestSoi;
+	if (mk1 != nullptr) delete mk1;
+	if (mk2 != nullptr) delete mk2;
+
+	mk1 = new Marker(0, 1, (glm::vec3)pvb4.Pos, *(bodies[closestSoi]->Pos));
 	if (bodies[targetID]->isMoon)
 		mk2 = new Marker(0, 1, (glm::vec3)(bodies[targetID]->getPV(time, true).Pos), *(bodies[targetID]->gravSource->Pos)); // scheme changes for planet targets
 	else

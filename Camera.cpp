@@ -335,7 +335,7 @@ void Camera::hardInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, st
 	if (focusMode == true && focusBody >= 0) {
 		Position = *bodyPos[focusBody] + focusPos;
 	}
-	else if (focusMode == true) {
+	else if (focusMode == true && satList->size() > (-focusBody - 1)) {
 		Position = *(*satList)[-focusBody - 1] + focusPos;
 	}
 }
