@@ -38,8 +38,8 @@ Eliminate the text file above the name of the first trajectory. There should be 
 of the trajectories. The line directly under the final trajectory should be "***". This is immediately followed by the first
 line of state data. The line directly under the final line of state data should be "***". This should terminate the file.
 
-Input the file into the program by going to System.cpp in the source code and adding
-'initSat("*satellite name*", "**file*.txt");'
+Input the file into the program by going to System.cpp in the source code and adding<br>
+initSat("*satellite name*", "**file*.txt");<br>
 underneath the "initPersistSats" function call in the System class constructor.
 
 https://ssd.jpl.nasa.gov/horizons/app.html#/<br><br><br>
@@ -105,14 +105,16 @@ reason it can't be changed. I think it looks like telescopic imagery from far aw
 ### Future Plans
 ---
 
-Improving the accuracy of the data sent to the GUI, making the state update infrastructure more robust through
-both forward and backward time travel. Energy replenishment for trajectory accuracy, smarter time step 
-algorithms. Show planet's current position when zoomed out. Fix refined list problems on orbital paths of bodies.
-Add initial dry mass, wet, engine specs, calculate delta-V in initialization process of a satellite, and
-operate missions under those constraints - including exotic propulsion methods like ion and nuclear. Tools for setting up
-gravity assists, providing transfer windows for mission objectives depending on the amount of delta-V willing to be
-used / elapsed time constraints. Next / last orbit preview to see orbital precession. Change colors of trajectories
-through different spheres of influence. Align rotational axes with true values.
+- improving the accuracy of the data sent to the GUI
+- making the state update infrastructure more robust through both forward and backward time travel
+- energy replenishment for trajectory accuracy
+- smarter time step algorithms
+- show planet's current position when zoomed out. Fix refined list problems on orbital paths of bodies.
+- add initial dry mass, wet, engine specs, calculate delta-V in initialization process of a satellite, and operate missions under those constraints - including exotic propulsion methods like ion and nuclear
+- tools for setting up gravity assists, providing transfer windows for mission objectives depending on the amount of delta-V willing to be used / elapsed time constraints 
+- next / last orbit preview to see orbital precession
+- change colors of trajectories through different spheres of influence
+- align rotational axes with true values
 
 
 
