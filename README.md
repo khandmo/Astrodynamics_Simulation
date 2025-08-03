@@ -41,24 +41,25 @@ line of state data. The line directly under the final line of state data should 
 https://ssd.jpl.nasa.gov/horizons/app.html#/<br><br><br>
 
 
-### Controls: (use at your own descretion)
+### Controls (use at your own discretion)
+---
 F - Free/Focus Mode is toggled<br>
 V - Top down / Planar view is toggled<br>
 R - Camera reset (depending on view mode) is activated<br>
-P - Skybox is toggled<br><br><br>
+P - Skybox is toggled<br>
 
 #### Free Mode:
 WASD - Movement<br>
 Space - Vertical Up movement<br>
 Control - Vertical Down movement<br>
 Shift - Increase speed in any direction<br>
-Left Mouse Hold - Moves the camera in any direction<br><br><br>
+Left Mouse Hold - Moves the camera in any direction<br>
 
 #### Focus Mode:
 W - Zoom in<br>
 S - Zoom out<br>
 A/D - Change focus body<br>
-Left Mouse Hold - Revolve around focus body<br><br>
+Left Mouse Hold - Revolve around focus body<br>
 
 Body Manipulation - Bodies are added in the main file and must be added to the 
 array of meshes (and the number of bodies constant must be appropriately set).
@@ -67,9 +68,10 @@ and initial positions are also labeled in the main file.
 Non-Solar meshes should be shaded with the default shader as they are in the main file.
 The render file has a function "Move" which assigns velocities, rotational speed,
 and orbital evolution speed (dt). Higher dt results in slower evolution. Lower dt
-results in faster evolution.<br><br><br>
+results in faster evolution.<br><br>
 
 ### Links
+---
 
 #### Methods:
 https://learnopengl.com/
@@ -84,6 +86,7 @@ https://ilrs.gsfc.nasa.gov/docs/2014/196C.pdf<br><br><br><br>
 
 
 ### Known Problems
+---
 
 Using the GUI to go to a maneuver on a sat and letting some uncertain amount of time pass may result
 in a spotaneous inTime = false scenario, ending the sat's life and resetting focus to the Sun.<br><br>
