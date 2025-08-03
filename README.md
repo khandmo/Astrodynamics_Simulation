@@ -93,24 +93,24 @@ https://svs.gsfc.nasa.gov/4851/
 #### Moon Texture-
 https://svs.gsfc.nasa.gov/cgi-bin/details.cgi?aid=4720
 #### Real Modeling Description - 
-https://ilrs.gsfc.nasa.gov/docs/2014/196C.pdf<br><br><br><br>
+https://ilrs.gsfc.nasa.gov/docs/2014/196C.pdf<br><br><br>
 
 
 ### Known Problems / FAQ
 ---
 
-Using the GUI to go to a maneuver on a sat and letting some uncertain amount of time pass may result
-in a spotaneous inTime = false scenario, ending the sat's life and resetting focus to the Sun.<br><br>
+- Using the GUI to go to a maneuver on a sat and letting some uncertain amount of time pass may result
+in a spotaneous inTime = false scenario, ending the sat's life and resetting focus to the Sun.<br>
 
-GUI satellite parameters like apoapsis / periapsis information as well as close approach time and distance
-can be wrong. <br><br>
+- GUI satellite parameters like apoapsis / periapsis information as well as close approach time and distance
+can be wrong. <br>
 
-Planet and moon orbits can be wrong / have chunks raised or lowered out of the normal plane. All these bugs
+- Planet and moon orbits can be wrong / have chunks raised or lowered out of the normal plane. All these bugs
 are related to the "refined list" which is supposed to account for smoother orbits near the body itself.
-This list can be connected to a main and less smooth orbit.<br><br>
+This list can be connected to a main and less smooth orbit.<br>
 
-Small moons look like that because the simulation units are relatively small and accuracy is hard to come by. No
-reason it can't be changed. I think it looks like telescopic imagery from far away so I don't mind.<br><br>
+- Small moons look like that because the simulation units are relatively small and accuracy is hard to come by. No
+reason it can't be changed. I think it looks like telescopic imagery from far away so I don't mind.<br>
 
 
 ### Future Plans
