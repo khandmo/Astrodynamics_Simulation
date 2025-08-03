@@ -1,0 +1,362 @@
+#include "Render.h"
+
+unsigned int loadCubeMap(std::vector<const char*> faces);
+
+glm::mat4 mat4Mult(glm::mat4 A, glm::mat4 B);
+
+RenderSet::RenderSet(GLFWwindow* window, Camera& camera, int width, int height) {
+	RenderSet::window = window;
+	RenderSet::camera = &camera;
+	screenWidth = width;
+	screenHeight = height;
+
+	// create framebuffer
+	glGenFramebuffers(1, &depthMapFBO);
+	glGenTextures(1, &depthMap);
+}
+
+
+void RenderSet::set() {
+	// generate 2D depth map
+	
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, shadowWidth,
+		shadowHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	// attach to framebuffer
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
+		depthMap, 0);
+	// do not render color data
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
+	// generate skybox
+	float skyboxVertices[] = {
+		// positions          
+		-1.0f,  1.0f, -1.0f,
+		-1.0f, -1.0f, -1.0f,
+		 1.0f, -1.0f, -1.0f,
+		 1.0f, -1.0f, -1.0f,
+		 1.0f,  1.0f, -1.0f,
+		-1.0f,  1.0f, -1.0f,
+
+		-1.0f, -1.0f,  1.0f,
+		-1.0f, -1.0f, -1.0f,
+		-1.0f,  1.0f, -1.0f,
+		-1.0f,  1.0f, -1.0f,
+		-1.0f,  1.0f,  1.0f,
+		-1.0f, -1.0f,  1.0f,
+
+		 1.0f, -1.0f, -1.0f,
+		 1.0f, -1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		 1.0f,  1.0f, -1.0f,
+		 1.0f, -1.0f, -1.0f,
+
+		-1.0f, -1.0f,  1.0f,
+		-1.0f,  1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		 1.0f, -1.0f,  1.0f,
+		-1.0f, -1.0f,  1.0f,
+
+		-1.0f,  1.0f, -1.0f,
+		 1.0f,  1.0f, -1.0f,
+		 1.0f,  1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		-1.0f,  1.0f,  1.0f,
+		-1.0f,  1.0f, -1.0f,
+
+		-1.0f, -1.0f, -1.0f,
+		-1.0f, -1.0f,  1.0f,
+		 1.0f, -1.0f, -1.0f,
+		 1.0f, -1.0f, -1.0f,
+		-1.0f, -1.0f,  1.0f,
+		 1.0f, -1.0f,  1.0f
+	};
+	glGenVertexArrays(1, &skyboxVAO);
+	glGenBuffers(1, &skyboxVBO);
+	glBindVertexArray(skyboxVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+	// load skybox textures
+	std::vector<const char*> faces{
+		"Textures/px.png",
+		"Textures/nx.png",
+		"Textures/py.png",
+		"Textures/ny.png",
+		"Textures/pz.png",
+		"Textures/nz.png"
+	};
+	cubemapTex = loadCubeMap(faces);
+	// send uniforms to shader
+	skyboxShader.Activate();
+	glUniform1i(glGetUniformLocation(skyboxShader.ID, "skybox"), 0);
+
+	// SHADOW DEBUGGING TOOLS
+	//debug.Activate();
+	//glUniform1i(glGetUniformLocation(debug.ID, "depthMap"), 0);
+
+	}
+
+void RenderSet::ShadowRender(std::vector<Mesh*> &bodies, Camera* camera) {
+	// activate shadow shader with above matrix
+	shadowProgram.Activate();
+
+	// set light shader matrix
+// objects not in depth map will not produce shadows
+	float near_plane = 1.0f, far_plane = 17.5f; // if lightView matrix focuses on planets, FOV must be wide enough to catch moon(s)
+	glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f,
+		-10.0f, 10.0f, near_plane, far_plane);
+
+	int closestBody = 0;
+	float distanceToClosest = 10000;
+	// find closest planet to camera (body 0 is the sun and bodies 4 and 8 are not planets)
+	for (int i = 1; i < bodies.size(); i++) {
+		if (i != 4 && i != 8) {
+			float bodyDist = abs(glm::length(camera->Position - *(bodies[i]->Pos)));
+			if (distanceToClosest > bodyDist) { // vector to body
+				distanceToClosest = bodyDist;
+				closestBody = i;
+			}
+		}
+	}
+
+	glm::mat4 lightView = glm::lookAt( // has be based on focused body position if a focused body exists
+		*(bodies[closestBody]->Pos) - (7.0f * glm::normalize(*(bodies[closestBody]->Pos))), // light source position - a fixed distance from the closest planet to camera
+		*(bodies[closestBody]->Pos), // position looking towards - closest body position
+		glm::vec3(0.0f, 1.0f, 0.0f));
+
+	lightSpaceMatrix = lightProjection * lightView;
+
+	// render to depth map
+	glViewport(0, 0, shadowWidth, shadowHeight);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// render scene with shadow shader
+	for (int i = 0; i < bodies.size(); i++) {
+		bodies[i]->setShadowShader(shadowProgram, lightSpaceMatrix);
+		bodies[i]->switchShader();
+		if (i != 0) { // if not sun
+			bodies[i]->dullShader(*bodies[0]); // send uniforms to depth shaders
+			bodies[i]->Draw(*camera); // draw body (MUST BE CONSECUTIVE)
+		}
+	}
+	//RenderObjects(bodies, numBodies); // draw bodies (lay texture(s) and bind)
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	
+
+	
+	// render scene normally with shadow mapping
+	glViewport(0, 0, screenWidth, screenHeight);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	for (int i = 0; i < bodies.size(); i++) {
+		bodies[i]->switchShader();
+		bodies[i]->setDepthMap(depthMap); // give depthMap to Mesh
+		if (i != 0) { // if not sun
+			bodies[i]->dullShader(*bodies[0]);  // send uniforms to normal shaders
+		}
+		bodies[i]->Draw(*camera); // draw bodies (lay texture(s) and bind)
+	}
+
+	// SHADOW DEBUGGING TOOLS
+	/*
+	debug.Activate();
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+
+	unsigned int quadVAO = 0;
+	unsigned int quadVBO;
+		if (quadVAO == 0)
+		{
+			float quadVertices[] = {
+				// positions        // texture Coords
+				-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+				-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+				 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+				 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+			};
+			// setup plane VAO
+			glGenVertexArrays(1, &quadVAO);
+			glGenBuffers(1, &quadVBO);
+			glBindVertexArray(quadVAO);
+			glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+			glEnableVertexAttribArray(1);
+			glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+		}
+		glBindVertexArray(quadVAO);
+		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		glBindVertexArray(0);*/
+}
+
+void RenderSet::Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos) {
+	// Every object that orbits must also have a rotate function, if it should not rotate set the first parameter to 0.0f
+	// Object will not be drawn if both functions are not present
+	
+	// Orbit drawing prep
+	uniform_data_t uni;
+	glm::mat4 mvp = camera->cameraMatrix * glm::mat4(1.0); // mult 4x4 glm - non zero, should check shader
+	uni.mvp = &mvp[0][0];
+	glm::vec4 vpt = glm::vec4(0, 0, (float)camera->width, (float)camera->height);
+	uni.viewport = &vpt.z;
+	glm::vec2 aa_radii = glm::vec2(2.0f, 2.0f);
+	uni.aa_radius = &aa_radii.x;
+
+	int closestID = -1;
+	double dist = INT_MAX;
+	for (int i = 1; i < bodies.size(); i++) {
+		double dummyDist = distanceFind(*((*bodies[i]).Pos), cameraPos);
+		if (dummyDist < dist) {
+			dist = dummyDist;
+			closestID = (*bodies[i]).baryID;
+		}
+	}
+
+	for (int i = 1; i < bodies.size(); i++) {
+		for (auto lBody : lBodies) {
+			(*bodies[i]).Rotate(lBody, simTime_sec);
+			(*bodies[i]).Orbit(lBody, simTime_sec, dt, cameraPos);
+			// update and render lines
+			if ((*bodies[i]).bIdx == -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
+				for (int j = 0; j < (*bodies[i]).lineBufferSize; j++) {
+					(*bodies[i]).lineBuffer[j].col = (*bodies[i]).lineColor;
+				}
+				geom_shdr_lines_update(&bodies[i]->pathDevice, &bodies[i]->lineBuffer,
+					bodies[i]->lineBufferSize, sizeof(vertex_t), &uni);
+				geom_shdr_lines_render(&bodies[i]->pathDevice, bodies[i]->lineBufferSize);
+			}
+			
+			if ((*bodies[i]).bIdx != -1 && (!(*bodies[i]).isMoon || distanceFind(*((*bodies[i]).gravSource->Pos), cameraPos) < (*bodies[i]).refinedRadius)) {
+				
+				vertex_t* lB = (*bodies[i]).lineBuffer;
+				vertex* rB = (*bodies[i]).refinedList;
+				const int lBSz = (*bodies[i]).lineBufferSize;
+				const int bID = (*bodies[i]).bIdx;
+				const int rID = (*bodies[i]).rIdx;
+				const int brGap = ((rID - bID + lBSz) % lBSz) - 1; // mising verts between b and r
+				const int llBSize = LINE_BUFF_SIZE + REF_LIST_SIZE;
+				vertex_t llB[llBSize];
+				int rLEndIdx = (*bodies[i]).refListStartIdx - 1 >= 0 ? (*bodies[i]).refListStartIdx - 1 : REF_LIST_SIZE - 1;
+				llB[0] = rB[rLEndIdx]; // circular cap
+				llB[0].col = (*bodies[i]).lineColor;
+				int k = 0, k2 = 0; // secondary index
+
+				// linebuffer implant
+				for (int j = rID; j < lBSz; j++) {
+					llB[k + 1] = lB[j];
+					llB[k + 1].col = (*bodies[i]).lineColor; // update line color
+					k++;
+					if (j == lBSz - 1) j = -1;
+					if (bID == lBSz - 1) {
+						if (j == 0) break;
+					}
+					else {
+						if (j == bID + 1) break;
+					}
+				}
+
+				// refined list implant
+				for (int j = (*bodies[i]).refListStartIdx; j < REF_LIST_SIZE; j++){
+					llB[k + 1] = rB[j];
+					llB[k + 1].col = (*bodies[i]).lineColor; // update line color
+					if (j == REF_LIST_SIZE - 1) j = -1; // handle wrap
+					if (k2 == REF_LIST_SIZE - 2) break;
+					k++;
+					k2++;
+				}
+				
+				geom_shdr_lines_update(&(*bodies[i]).pathDevice, llB,
+					llBSize - brGap + 1, sizeof(vertex_t), &uni);
+				geom_shdr_lines_render(&(*bodies[i]).pathDevice, llBSize - brGap + 1);
+			}
+
+		}
+	}	
+}
+
+void RenderSet::ArtSatRenderAll(std::vector<ArtSat*> artSats, double simTime_sec) {
+	if (artSats.size() > 0) {
+		for (int i = 0; i < artSats.size(); i++) {
+			// render all art sat lines and obj
+
+		}
+	}
+}
+
+void RenderSet::RenderSkyBox(Camera* camera) {
+	glDepthFunc(GL_LEQUAL);
+	skyboxShader.Activate();
+	glm::mat4 view = glm::mat4(1.0f);
+	view = glm::lookAt(glm::vec3(0.0f), (*camera).Orientation, (*camera).Up);
+	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(glGetUniformLocation(skyboxShader.ID, "proj"), 1, GL_FALSE, glm::value_ptr((*camera).proj));
+
+	
+	glBindVertexArray(skyboxVAO);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTex);
+
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	glBindVertexArray(0);
+	glDepthFunc(GL_LESS);
+}
+
+void RenderSet::updateWindowSize(int width, int height) {
+	RenderSet::screenWidth = width;
+	RenderSet::screenHeight = height;
+}
+
+unsigned int loadCubeMap(std::vector<const char*> faces) {
+	// loads set of textures to cube map from local path
+	unsigned int textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+	
+	// retreive data and set to cube map
+	int width, height, nrChannels;
+	for (unsigned int i = 0; i < faces.size(); i++) {
+		unsigned char* data = stbi_load(faces[i], &width, &height, &nrChannels, 0);
+		if (data) {
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+			stbi_image_free(data);
+		}
+		else {
+			std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
+			stbi_image_free(data);
+		}
+	}
+	// wrap textures
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	return textureID;
+}
+
+glm::mat4 mat4Mult(glm::mat4 A, glm::mat4 B) {
+	glm::mat4 ans;
+	int i = -1;
+	for (int p = 0; p < 16; p++) {
+		if (p % 4 == 0) i++;
+		int j = p - 4 * i;
+		ans[i][j] = A[0][j] * B[i][0] + A[1][j] * B[i][1] + A[2][j] * B[i][2] + A[3][j] * B[i][3];
+	}
+	return ans;
+}

@@ -10,12 +10,12 @@
 #include <glm/gtx/vector_angle.hpp>
 #include <vector>
 
-
 #include "Shaders.h"
 #include "GUI.h"
 
 #define NORM_SPEED 0.01f
 
+glm::vec3 sphToCart(glm::vec3 sphCoords);
 /*
 The camera class handles the manipulation of the camera matrices for position and orientation. It also handles
 user inputs for movement of the camera and focus mode / view.
@@ -26,9 +26,12 @@ public:
 	int cameraViewCycle = 0;
 	bool focusMode = false;
 	bool lastFocusMode = false;
-	int lastFocusBody = 0;
-	int focusBody = 0;
+	int lastFocusBody = INT_MAX;
+	int focusBody = INT_MAX;
 	glm::vec3 focusPos = glm::vec3(3.0f, 0.0f, 0.0f);
+	glm::vec3 defaultFocus = glm::vec3(8.0f, 0.0f, 0.0f);
+	glm::vec3 defaultSatFocus = glm::vec3(.05f, 0, 0);
+	double focusMag = 0;
 
 	glm::vec3 Position;
 	glm::vec3 OrigPos;
@@ -57,9 +60,9 @@ public:
 
 	void Matrix(Shader& shader, const char* uniform);
 	
-	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos);
+	void smoothInputs(GLFWwindow* window, std::vector<glm::vec3*> &bodyPos, std::vector<glm::vec3*>* satList);
 
-	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii, bool& skybox, int& dt);
+	void hardInputs(GLFWwindow* window, std::vector<glm::vec3*>& bodyPos, std::vector<float>& bodyRadii, std::vector<glm::vec3*>* satList, bool& skybox, int& dt);
 
 	// handles press and release for robust button press recognition
 	bool keyPress(GLFWwindow* window, int key);

@@ -7,7 +7,7 @@
 #include <string>
 #include "Mesh.h"
 #include "Camera.h"
-
+#include "System.h" // don't know if this works
 /*
 Render handles generation of shadow maps and skybox. Anything not directly related to meshes or camera is manipulated here. Render
 also commands the simultaneous motion of bodies and initially prepares the window for display.
@@ -39,7 +39,9 @@ public:
 	// render shadow maps
 	void ShadowRender(std::vector<Mesh*> &bodies, Camera* camera);
 	// move bodies
-	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos);
+	void Move(std::vector<Mesh*> &bodies, std::vector<Mesh*> &lBodies, double simTime_sec, int dt, glm::vec3 cameraPos, bool showOrbit);
+	// art sat handle
+	void ArtSatRenderAll(std::vector<ArtSat*> artSats, double simTime_sec);
 	// render skybox
 	void RenderSkyBox(Camera* camera);
 	// update screen size

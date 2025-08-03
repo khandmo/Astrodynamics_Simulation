@@ -1,7 +1,12 @@
 #ifndef OBJECT_H
 #define OBJECT_H
 
-#include "Mesh.h"
+#include <vector>
+#include "VBO.h"
+#include <GLFW/glfw3.h>
+#include <glm/gtc/type_ptr.hpp>
+
+
 
 /*
 Object Mesh Summon creates the vertex data and element index data for a given shaped object using algorithms from simple inputs.
@@ -17,13 +22,13 @@ public:
 	Object();
 
 	// creates object box at origin painted in associated color
-	void Box(GLfloat length, GLfloat red, GLfloat green, GLfloat blue);
+	void Box(GLfloat length);
 
 	// creates planar object that
-	void Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat green, GLfloat blue);
+	void Rings(float innerRadius, float outerRadius);
 
 	// creates object sphere with # of pedals 360 * factor360 painted in associated color
-	void Sphere(float radius, GLfloat red, GLfloat green, GLfloat blue);
+	void Sphere(float radius);
 };
 
 #endif

@@ -1,7 +1,11 @@
+#define _CRTDBG_MAP_ALLOC
+#include <cstdlib>
+#include <crtdbg.h>
 #include "System.h"
 #include "Object.h"
 #include "Render.h"
 #include "GUI.h"
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -12,9 +16,32 @@ struct WindowData {
 	Camera* camera;
 };
 
+
 int main() {
 	// glfw initiatizer
-	glfwInit();
+	glfwInitHint(GLFW_JOYSTICK_HAT_BUTTONS, GLFW_FALSE);
+	if (!glfwInit()) {
+		return -1;
+	}
+
+	// prominent memory leak breakpoint sets
+	//_crtBreakAlloc = 998;
+	//_crtBreakAlloc = 1186;
+	//_crtBreakAlloc = 1340;
+	//_crtBreakAlloc = 3062;
+	//_crtBreakAlloc = 3065;
+	//_crtBreakAlloc = 3099;
+	//_crtBreakAlloc = 3100;
+	//_crtBreakAlloc = 420394;
+	//_crtBreakAlloc = 240398;
+	//_crtBreakAlloc = 651929;
+	//_crtBreakAlloc = 651964;
+	//_crtBreakAlloc = 653047;
+	//_crtBreakAlloc = 653379;
+	//_crtBreakAlloc = 2614835;
+	//_CrtSetBreakAlloc(1160);
+
+
 	// Tells glfw what type of opengl I use
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -48,6 +75,7 @@ int main() {
 	glEnable(GL_DEPTH_TEST);
 	// initialize Camera with initial position
 	Camera camera(width, height, glm::vec3(130.0f, 0.0f, 0.0f));
+	Sys.camera = &camera;
 
 	WindowData data = { width, height, &camera};
 	glfwSetWindowUserPointer(window, &data);
@@ -60,72 +88,88 @@ int main() {
 
 	// set skybox and time float
 	bool skyboxOn = true;
-	int dtRange[31] = { -10000000, -1000000, -100000, -10000, -1000, -500, -200, -100, -64, -32, -16, -8, -4, -2, -1, 0, 
-		1, 2, 4, 8, 16, 32, 64, 100, 200, 500, 1000, 10000, 100000, 1000000, 10000000}; // fixed time warp range -10mil to 10mil
+	int dtRange[31] = { -1000000, -500000, -100000, -50000, -20000, -10000, -5000, -2000, -1000, -500, -200, -100, -50, -10, -1, 0, 
+		1, 10, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000}; // fixed time warp range -1mil to 1mil
 	int dt = 16; // current time warp index 
 	bool dtChange = false;
 	float clickPTime = glfwGetTime();
 
 	Sys.SystemTime();
 
-	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, Sys.bodies, &(camera.speed), &(camera.focusMode), &(camera.focusBody) };
+	GUIData guiData = { Sys.simTime.timeString, dtRange[dt], &dt, &Sys.simTime.time_in_sec, &Sys };
 	GUI gui(window, guiData);
+
+	bool gathered = false;
+	std::chrono::time_point<std::chrono::system_clock> prev;
+	double prev2;
+	_CrtDumpMemoryLeaks();
 
 	std::cout << "beginning sim" << std::endl; 
 	while (!glfwWindowShouldClose(window)) {
-		// constantly checks current state of window 
-		glfwPollEvents();
 		// process GUI
 		gui.guiLoopStart(guiData);
 
 		if (!skyboxOn) {
-			glClearColor(0.24f, 0.28f, 0.45f, 1.0f);
+			glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		}
 		else {
 			glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // need to modify in sys fxn orbHandle
 		}
 		float clickCTime = glfwGetTime();
 
-		Sys.updateBodyState();
+
 
 		// input handling -  should add input for safe obliteration (cease while loop)
 		// for holding inputs
-		(camera).smoothInputs(window, Sys.bodyPos);
+		(camera).smoothInputs(window, Sys.bodyPos, &Sys.satPos);
 		// for single click inputs - must change dt bounds here if dtRange size changes
-		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, skyboxOn, dt);
+		(camera).hardInputs(window, Sys.bodyPos, Sys.bodyRadii, &Sys.satPos, skyboxOn, dt);
 		// values to be able to see the sun from neptune and handle resized windows
 		(camera).updateWindowSize(data.width, data.height);
-		(camera).updateMatrix(45.0f, 0.001f, 6100.0f * 2);
+		(camera).updateMatrix(45.0f, 0.001f, 500000.0f);
 
 		(Renderer).updateWindowSize(data.width, data.height);
 
 
 		// Process time 
 		Sys.WarpClockSet(dtRange[dt]);
+		if (gui.goToManTime != -1) {
+			Sys.ArgClockSet(gui.goToManTime);
+			gui.goToManTime = -1;
+		}
 
 		//Render scene
 		Renderer.ShadowRender(Sys.bodies, &camera);
-		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, dt, (camera).Position);
+		Renderer.Move(Sys.bodies, Sys.lightBodies, Sys.simTime.time_in_sec, dt, (camera).Position, gui.orbitShow);
+		
+
+		//Handle changes
+		Sys.updateBodyState();
 		Sys.orbLineHandle((camera).Position);
+		Sys.ArtSatHandle(&camera, Sys.simTime.time_in_sec, dt);
+
+
 		if (skyboxOn) {
 			Renderer.RenderSkyBox(&camera);
 		}
 
 		// Render GUI
-		gui.guiLoopEnd();
+		gui.guiLoopEnd(guiData);
 
 		// update gui info
 		guiData.time = Sys.simTime.timeString;
 		guiData.tWRange = dtRange[dt];
-		guiData.tW = &dt;
+
 		
 		//update image each frame
 		glfwSwapBuffers(window);
+		// constantly checks current state of window 
+		glfwPollEvents();
 
 	}
 
 	// terminatation handling
-	Sys.deleteSystem(); // need new fxn NOW FROM SYSTEM
+	Sys.~System(); // need new fxn NOW FROM SYSTEM
 	glfwDestroyWindow(window);
 	glfwTerminate();
 	gui.guiDestroy();

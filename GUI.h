@@ -6,20 +6,25 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <vector>
-#include "Mesh.h"
+#include <future>
+#include <iostream>
+#include "System.h"
 
-struct Mesh; // "foward declaration" solved issues with the struct not recognizing
+
+class Mesh; // "foward declaration" solved issues with the struct not recognizing
+class Camera;
+class System;
+class ArtSat;
+struct pvUnit;
+
 
 struct GUIData {
 	char* time;
 	int tWRange;
 	int* tW;
+	double* simTime;
 
-	std::vector <Mesh*> bodies;
-
-	float* camSpeed;
-	bool* focusMode;
-	int* focusBody;
+	System* Sys;
 };
 
 
@@ -29,13 +34,59 @@ public:
 	const char** bodyNames = nullptr;
 	int bodyNamesLen;
 
+	const char** satNames = nullptr;
+	int satNamesLen;
+
+	int focusType = 0; // locally designates difference between planet and sat focus
+	int satFocusIndex = 0;
+
+	ArtSat* sat = nullptr;
+	pvUnit* pv = nullptr;
+
+	bool newArtSat = false;
+	bool newMan = false;
+	// new artificial satellite parameters
+	glm::vec3 initPos = { 415, glm::pi<float>() / 2, glm::pi<float>() / 4 };
+	glm::vec3 initVel = { 7.67, glm::pi<float>() / 2, glm::pi<float>() / 2 };
+
+	ArtSat* copySat = nullptr;
+
+	
+	bool showMan = false;
+	bool targetWin = false;
+	bool retrograde = false;
+	bool fineCtrl = false;
+	bool transferWin = false;
+	bool targetFocus = false;
+	
+	const char** manList = nullptr;
+	int manListLen = 0;
+	int manListCurr = 0;
+	float transfer = -1;
+	double transferTime = -1;
+	double synPeriod = -1;
+	char* transferDate = new char[10];
+	int lastFocus = -1;
+
+	glm::vec3 manData = { 0, 0, 0 };
+	glm::vec3 oldManData = manData;
+	glm::vec3 fineCtrlData = { 0, 0, 0 };
+
+	std::atomic<bool>* manStopBool;
+	bool orbitShow = true;
+	
+	float newManDt = 0;
+	float oldManDt = 0;
+	float manDt = 0;
+	double goToManTime = -1;
+
 	GUI(GLFWwindow* window, GUIData guiData);
 
 	void guiLoopStart(GUIData guiData);
 
 	void guiLoopADS(GUIData guiData);
 
-	void guiLoopEnd();
+	void guiLoopEnd(GUIData guiData);
 
 	void guiDestroy();
 

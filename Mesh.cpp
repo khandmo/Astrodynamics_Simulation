@@ -1,13 +1,12 @@
 #include "Mesh.h"
 
 
-
-void stateChange(SpiceDouble* state); // changes SpiceDoubule state[0-2] data from real life to simulation environment
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state); // finds closest vertex in buffer to state
-void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int baryID,
+void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int spiceID,
 	 double* pbt, double* prt, int* pbtIdx, int* prtIdx, double* refListDt, const int lWidth, const glm::vec4 lColor); // generates refined List
 
-Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, bool isLight, bool areRings, Shader* shaderProgram, const char* soiID, int baryIDx, int spiceIDx, double UTCtime, int orbPeriod) {
+Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLuint> indices, std::vector <Texture> textures, float radius, float mass, bool isLight, bool areRings,
+	Shader* shaderProgram, const char* soiID, char* soiIndex, int baryIDx, int spiceIDx, double UTCtime, float orbPeriod) {
 	Mesh::name = objName;
 	Mesh::vertices = vertices;
 	Mesh::indices = indices;
@@ -15,25 +14,40 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	Mesh::areRings = areRings;
 	Mesh::isLightSource = isLight;
 	Mesh::soiID = soiID;
+	char* saveDummy = (char*)malloc(strlen(soiIndex) + 1);
+	strcpy(saveDummy, soiIndex);
+	Mesh::soiIdx = saveDummy;
 	Mesh::spiceID = spiceIDx;
 	Mesh::baryID = baryIDx;
 	Mesh::orbitalPeriod = orbPeriod; // each body has a factual orbital period in days hard coded for initialization
 	Mesh::refinedList = nullptr;
-	if (soiID != "-1" && soiID != "0") isMoon = true;
+	Mesh::radius = radius * LENGTH_SCALE;
+	Mesh::realRadius = radius;
+	Mesh::mass = mass * pow(10, 20);
+	if (std::strcmp(soiID,"10")) isMoon = true;
 	else isMoon = false;
 
 	
-	// initialize all kernels here, once (happens once for each body dumbass)
-	furnsh_c("spice_kernels/de432s.bsp"); // for pos/vel of bodies (baryID)
-	furnsh_c("spice_kernels/pck00011.tpc.txt"); // for axial orientation (spiceID)
 
 	// set object light emission color if any
 	if (isLight == true) {
 		Mesh::Color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
+	else {
+		Mesh::Color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	}
 
 	// init position(s)
-	Pos = new glm::vec3{ 0.0f, 0.0f, 0.0f };
+	SpiceDouble state[6];
+	SpiceDouble lt;
+	double et = ((UTCtime / 86400.0) + 2440587.5); // UTC to Julian
+	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET	
+	int ephID = spiceID;
+	if (spiceID > 399 && !isMoon)  // current ephemeris requirements
+		ephID = baryID;
+	spkezr_c(std::to_string(ephID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
+	stateChange(state);
+	Pos = new glm::vec3{ state[0], state[1], state[2] };
 	oPos = new glm::vec3{ *Pos };
 
 	// set object model position
@@ -49,29 +63,29 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 	VAO.Bind();
 
 	// vertex buffer object to send to GPU - array of data on vertices to be sent to GPU
-	VBO VBO(vertices);
-
+	my_VBO = new VBO(vertices);
+	
 	// element buffer object is an array of pointers in data in VBO allows me to arrange pointers as i please instead of copying data repeatedly
-	EBO EBO(indices);
+	my_EBO = new EBO(indices);
 
 	//Link VAO to VBO
 	//parameters: VBO, which vertex attribute (layout) to configure, number of vertex attributes (1 per 3-vertex), type - of vector data stored, stride - space in memory between consecutive vertex attribs, offset - of where pos data begins in buffer
 
 	// Links VBO to Position
-	VAO.LinkAttrib(VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
+	VAO.LinkAttrib(*my_VBO, 0, 3, GL_FLOAT, sizeof(Vertex), (void*)0);
 	// Links to Normals (layout 1 for shaders, offset by 3 from the start of pos
-	VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+	VAO.LinkAttrib(*my_VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
 	// Links to Colors (layout 2 for shader, offset by 6 from start of pos
-	VAO.LinkAttrib(VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
+	VAO.LinkAttrib(*my_VBO, 2, 3, GL_FLOAT, sizeof(Vertex), (void*)(6 * sizeof(float)));
 	// Links Texture (layout 3 for shaders, offset by 9 from the start of pos
-	VAO.LinkAttrib(VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
+	VAO.LinkAttrib(*my_VBO, 3, 2, GL_FLOAT, sizeof(Vertex), (void*)(9 * sizeof(float)));
 	VAO.Unbind();
-	VBO.Unbind();
-	EBO.Unbind();
+	my_VBO->Unbind();
+	my_EBO->Unbind();
 
 	// need to detect a full orbit (return to pt OR orbital period calculation)
 	// return to pt would work for spacecraft imp too, worth trying
-
+	
 	// conversions
 	int hour = 60 * 60;
 	int day = hour * 24;
@@ -79,15 +93,11 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 
 	// orbital line composition scripting
 	if (baryID != 10 && !areRings) {
-		SpiceDouble state[6];
-		SpiceDouble lt;
-		double et = UTCtime - UTC2J2000; // UTC to J2000
-			
 		vertex_t dummyier{}; // holds first orbital point to connect paths at end of buffer
 
 		double tPt = 0; // current time adjusted for frame
 		if (isMoon) tPt = et;
-		et = abs(Mesh::orbitalPeriod * day); // dunno why i have to abs this
+		et = (double)orbitalPeriod * (double)day; // dunno why i have to abs this
 		Mesh::lBVertDt = et / LINE_BUFF_SIZE_U;
 
 		for (int i = 0; i < LINE_BUFF_SIZE_U; i++) {
@@ -96,7 +106,7 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 				lineBufferSize -= 2 * (LINE_BUFF_SIZE_U + 1 - i); // ******************************** need a way to cut out lines that bridge unfulfilled orbits
 				break;
 			}
-			spkezr_c(std::to_string(baryID).c_str(), tPt, "J2000", "NONE", soiID, state, &lt);
+			spkezr_c(std::to_string(ephID).c_str(), tPt, "ECLIPJ2000", "NONE", soiID, state, &lt);
 			stateChange(state);
 
 			vertex_t dummy{};
@@ -118,6 +128,9 @@ Mesh::Mesh(const char* objName, std::vector <Vertex> vertices, std::vector <GLui
 		Mesh::pathDevice = geom_shdr_lines_init_device();
 	}
 
+
+
+	
 	/*
 
 
@@ -206,6 +219,7 @@ void Mesh::Draw(Camera& camera) {
 		// bind texture to uniform
 		textures[i].Bind();
 	}
+
 	// sets depth map from shadow render to normal render if it exists
 	if (depthMap != 0) {
 		glActiveTexture(GL_TEXTURE1);
@@ -221,7 +235,10 @@ void Mesh::Draw(Camera& camera) {
 void Mesh::Rotate(Mesh* lightSource, double UTCtime) { 
 	SpiceDouble w[3];
 	SpiceInt dim;
+
+	(*spiceMtx).lock();
 	bodvcd_c(spiceID, "PM", 3, &dim, w); // this angle is equivalent to the rotation angle, no need for rotation rates to be preprogrammed
+	(*spiceMtx).unlock();
 
 	float angle = glm::radians((float)w[0] + w[1] * ((UTCtime) / 86400)) + glm::pi<float>();
 	// transforms model matrix by rotation
@@ -232,9 +249,10 @@ void Mesh::Rotate(Mesh* lightSource, double UTCtime) {
 }
 
 void Mesh::AxialTilt(GLfloat tiltDeg) {
-	SpiceDouble ra[3], dec[3], lambda[1];
+	SpiceDouble ra[3], dec[3];
 	// the first constant in each of above is sufficient for the time scales of this program
 	SpiceInt dim;
+
 	bodvcd_c(spiceID, "POLE_RA", 3, &dim, ra);
 	bodvcd_c(spiceID, "POLE_DEC", 3, &dim, dec);
 
@@ -243,11 +261,11 @@ void Mesh::AxialTilt(GLfloat tiltDeg) {
 	radrec_c(range, ra[0], dec[0], rectan); // turns ra & dec to rectangular coords
 	double poleCoords[3];
 	poleCoords[0] = rectan[1]; poleCoords[1] = rectan[2]; poleCoords[2] = rectan[0];
-	glm::vec3 poleVec = glm::vec3(poleCoords[0], poleCoords[1], poleCoords[2]);
+	poleVec = glm::vec3(poleCoords[0], poleCoords[1], poleCoords[2]);
 	poleVec = glm::rotateY(poleVec, glm::radians(-23.4f)); // north pole vector in correct frame
 
 
-	Model = glm::rotate(Model, glm::radians(tiltDeg), glm::cross(Up, poleVec));
+	Model = glm::rotate(Model, glm::radians(tiltDeg), poleVec);
 	axisTiltDegree = tiltDeg;
 }
 
@@ -258,37 +276,22 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	// NASA SPICE position
 	SpiceDouble state[6];
 	SpiceDouble lt;
-	double et = UTCtime - UTC2J2000; // UTC to J2000
-	spkezr_c(std::to_string(baryID).c_str(), et, "J2000", "NONE", soiID, state, &lt);
+	double et = ((UTCtime / 86400.0) + 2440587.5); // UTC to JD
+	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
+
+	int ephID = spiceID;
+	if (spiceID > 399 && !isMoon)  // current ephemeris requirements
+		ephID = baryID;
+
+	(*spiceMtx).lock();
+	spkezr_c(std::to_string(ephID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
+	(*spiceMtx).unlock();
+
 	stateChange(state);
-	glm::vec3 tempPos= glm::vec3(state[0], state[1], state[2]);
+	glm::dvec3 tempPos= glm::vec3(state[0], state[1], state[2]);
 	if (isMoon && gravSource->Pos != nullptr) tempPos += *(gravSource->Pos); 
 	
-	// ************* below is not optimized for backwards time travel 
-
 	*Pos = tempPos;
-	/*
-	if ( lastItTime != NULL && abs(UTCtime - lastItTime) > 1 && distanceFind(cameraPos, *Pos) < refinedRadius) {
-		//if (isMoon) *Pos -= *(gravSource->oPos);
-		for (int i = 0; i < abs(UTCtime - lastItTime); i++) {
-			spkezr_c(std::to_string(baryID).c_str(), lastItTime - UTC2J2000 + i + 1, "J2000", "NONE", "10", state, &lt);
-			stateChange(state);
-			*Pos += glm::vec3(state[3], state[4], state[5]);
-		}
-		//if (isMoon) *Pos += *(gravSource->Pos);
-	}
-	else {
-		*Pos = tempPos;
-	}
-	*/
-	//*Pos += glm::vec3(state[3] * orbDt, state[4] * orbDt, state[5] * orbDt);
-	// use velocity for in-between pos update steps
-	
-	//std::cout << UTCtime - lastItTime << '\n';
-
-	//if (name == "moon")
-	//	std::cout << Pos->x << " " << Pos->y << " " << Pos->z << "\n";
-
 	// if object are rings, meshes normals must be flipped when the sun crosses the ring plane (z-axis turning points)
 	if (areRings) { // below assumes the starting position is at z = 0
 		if (Pos->z > 0 && !sign) {
@@ -298,10 +301,9 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 			}
 			// must bind new normals to the shaders
 			VAO.Bind();
-			VBO VBO(vertices);
-			VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+			my_VBO->Update(vertices);
 			VAO.Unbind();
-			VBO.Unbind();
+			my_VBO->Unbind();
 		}
 		else if (Pos->z < 0 && sign) {
 			sign = !sign;
@@ -309,10 +311,10 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 				vertices[i].normal = -vertices[i].normal;
 			}
 			VAO.Bind();
-			VBO VBO(vertices);
-			VAO.LinkAttrib(VBO, 1, 3, GL_FLOAT, sizeof(Vertex), (void*)(3 * sizeof(float)));
+			my_VBO->Update(vertices);
+			// *************** ADD BACK LINK ATTRIBUTES
 			VAO.Unbind();
-			VBO.Unbind();
+			my_VBO->Unbind();
 		}
 	}
 
@@ -338,9 +340,13 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	double week = 60 * 60 * 24 * orbitalPeriod / 24; // ref list time gap, should base this on orbital period
 
 	if (!areRings) {
-		if (distanceFind(cameraPos, *Pos) < refinedRadius && bIdx == -1) {
+		if (distanceFind(cameraPos, *Pos) < refinedRadius && bIdx == -1) { // if close, utilize regined list
 			refinedList = new vertex_t[REF_LIST_SIZE];
-			makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+
+			(*spiceMtx).lock();
+			makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, ephID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+			(*spiceMtx).unlock();
+
 			refNodeMarkerTime = UTCtime;
 			lBNodeMarkerTime = UTCtime;
 		}
@@ -358,8 +364,10 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 			if (numRefVerts >= REF_LIST_SIZE_U) { //redo
 				refNodeMarkerTime = UTCtime;
 				lBNodeMarkerTime = UTCtime;
-				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, baryID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
 
+				(*spiceMtx).lock();
+				makeRefinedList(refinedList, lineBuffer, lineBufferSize, gravSource, et, week, soiID, ephID, &bt, &rt, &bIdx, &rIdx, &refListDt, lineWidth, lineColor);
+				(*spiceMtx).unlock();
 			}
 			else if (numRefVerts > 0) { //modify
 				// handle time overflow
@@ -393,7 +401,11 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 				refListStartIdx = (refListStartIdx + REF_LIST_SIZE) % REF_LIST_SIZE;
 
 				for (int i = 0; i < numRefVerts; i++) {
-					spkezr_c(std::to_string(baryID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "J2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
+
+					(*spiceMtx).lock();
+					spkezr_c(std::to_string(ephID).c_str(), leader + (week / REF_LIST_SIZE_U) * (i + 1), "ECLIPJ2000", "NONE", soiID, stateDt, &lt); // need the simTime of the last relevant point
+					(*spiceMtx).unlock();
+
 					stateChange(stateDt);
 					
 
@@ -459,6 +471,49 @@ void Mesh::Orbit(Mesh* lightSource, double UTCtime, int timeWarpIndex, glm::vec3
 	}
 	Mesh::lastItTime = UTCtime;
 }
+/*
+Mesh::~Mesh() {
+	name = nullptr;
+	Pos = nullptr;
+	oPos = nullptr;
+	soiID = nullptr;
+	free(soiIdx);
+	soiIdx = nullptr;
+	refinedList = nullptr;
+	spiceMtx = nullptr;
+	ShaderProgram.Delete();
+	shadowShaderProgram.Delete();
+	VAO.Delete();
+	if (pathDevice != nullptr) {
+		geom_shdr_lines_term_device((void**)&pathDevice);
+		pathDevice = nullptr;
+	}
+	// could/should save & delete VBO/EBO
+	delete my_VBO;
+	my_VBO = nullptr;
+	delete my_EBO;
+	my_EBO = nullptr;
+}
+*/
+pvUnit Mesh::getPV(double time, bool stateChanged) { // *** add boolean for state change version instead
+	std::lock_guard<std::mutex> lock(*spiceMtx);
+
+	SpiceDouble state[6];
+	SpiceDouble lt;
+	double et = ((time / 86400.0) + 2440587.5);
+	et = (et - 2451545.0) * 86400.0; // JD to SPICE ET
+
+	int ephID = spiceID;
+	if (spiceID > 399) { // current ephemeris requirements
+		ephID = baryID;
+	}
+	spkezr_c(std::to_string(ephID).c_str(), et, "ECLIPJ2000", "NONE", soiID, state, &lt);
+
+	
+	if (stateChanged) stateChange(state);
+	
+	return pvUnit{ glm::vec3{state[0], state[1], state[2]}, glm::vec3{state[3], state[4], state[5]} };
+}
 
 
 void Mesh::updateModel(Mesh& source) {
@@ -467,33 +522,32 @@ void Mesh::updateModel(Mesh& source) {
 	glm::mat4 objModel = glm::mat4(1.0f);
 	Model = glm::translate(objModel, *Pos);
 
-	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::vec3(1.0f, 0.0f, 0.0f));
+	Model = glm::rotate(Model, glm::radians(axisTiltDegree), glm::cross(Up, poleVec));
 	Model = glm::rotate(Model, currAngleRad, Up);
 }
 
-
 double distanceFind(std::vector<double> pt1, std::vector<double> pt2) {
-	double x2 = abs(pt1[0] - pt2[0]);
-	double y2 = abs(pt1[1] - pt2[1]);
-	double z2 = abs(pt1[2] - pt2[2]);
+	double x2 = pt1[0] - pt2[0];
+	double y2 = pt1[1] - pt2[1];
+	double z2 = pt1[2] - pt2[2];
 	x2 *= x2; x2 += (y2 * y2) + (z2 * z2);
 	return sqrt(x2);
 }
 
 double distanceFind(glm::vec3 state1, SpiceDouble * state2) {
-	double x = abs(state1[0] - state2[0]);
-	double y = abs(state1[1] - state2[1]);
+	double x = state1[0] - state2[0];
+	double y = state1[1] - state2[1];
 	x *= x; x += y * y;
-	y = abs(state1[2] - state2[2]);
+	y = state1[2] - state2[2];
 	x += y * y;
 	return sqrt(x);
 }
 
 double distanceFind(glm::vec3 state1, glm::vec3 state2) {
-	double x = abs(state1[0] - state2[0]);
-	double y = abs(state1[1] - state2[1]);
+	double x = state1[0] - state2[0];
+	double y = state1[1] - state2[1];
 	x *= x; x += y * y;
-	y = abs(state1[2] - state2[2]);
+	y = state1[2] - state2[2];
 	x += y * y;
 	return sqrt(x);
 }
@@ -502,17 +556,39 @@ double distanceFind(glm::vec3 state1, glm::vec3 state2) {
 void stateChange(SpiceDouble* state) { 
 	// scales states by chosen value
 	for (int i = 0; i < 6; i++) {
-		state[i] = (state[i] * 6100) / LARGEST_DISTANCE;
+		state[i] = state[i] * LENGTH_SCALE;
 	}
 
 	// places the eccliptic horizontal and changes orientation for OpenGL
 	glm::vec3 posVec = glm::vec3(state[0], state[1], state[2]);
-	posVec = glm::rotateX(posVec, glm::radians(-23.4f));
 	state[0] = posVec.y; state[1] = posVec.z; state[2] = posVec.x;
 
 	posVec = glm::vec3(state[3], state[4], state[5]);
-	posVec = glm::rotateX(posVec, glm::radians(-23.4f));
 	state[3] = posVec.y; state[4] = posVec.z; state[5] = posVec.x;
+}
+
+// no rotate
+void stateChange(glm::dvec3* pos, glm::dvec3* vel) { 
+	for (int i = 0; i < 3; i++) {
+		(*pos)[i] = (*pos)[i] * LENGTH_SCALE;
+		(*vel)[i] = (*vel)[i] * LENGTH_SCALE;
+	}
+	double dummy = (*pos)[0];
+	(*pos)[0] = (*pos)[1]; (*pos)[1] = (*pos)[2]; (*pos)[2] = dummy;
+	dummy = (*vel)[0];
+	(*vel)[0] = (*vel)[1]; (*vel)[1] = (*vel)[2]; (*vel)[2] = dummy;
+}
+
+// no rotate
+void invStateChange(glm::dvec3* pos, glm::dvec3* vel) {
+	for (int i = 0; i < 3; i++) {
+		(*pos)[i] = (*pos)[i] / LENGTH_SCALE;
+		(*vel)[i] = (*vel)[i] / LENGTH_SCALE;
+	}
+	double dummy = (*pos)[2];
+	(*pos)[2] = (*pos)[1]; (*pos)[1] = (*pos)[0];  (*pos)[0] = dummy;
+	dummy = (*vel)[2];
+	(*vel)[2] = (*vel)[1]; (*vel)[1] = (*vel)[0]; (*vel)[0] = dummy;
 }
 
 int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {
@@ -566,19 +642,20 @@ int closestVertex(vertex_t* lineBuffer, int setSize, SpiceDouble* state) {
 	return idx;
 }
 
-void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int baryID,
+void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int lineBufferSize, Mesh* gravSource, double et, int timeWidth, const char* soiID, int spiceID,
 	 double* pbt, double* prt, int* pbtIdx, int* prtIdx, double* refListDt, const int lWidth, const glm::vec4 lColor) {
 	double bt = et - timeWidth/2;  *pbt = bt;
 	double rt = et + timeWidth/2;  *prt = rt;
 
 	double rfDt = (rt - bt) / REF_LIST_SIZE_U; *refListDt = rfDt;
 
+
 	SpiceDouble stateBt[6];
 	SpiceDouble stateRt[6];
 	SpiceDouble stateDt[6];
 	SpiceDouble lt;
-	spkezr_c(std::to_string(baryID).c_str(), bt, "J2000", "NONE", soiID, stateBt, &lt);
-	spkezr_c(std::to_string(baryID).c_str(), rt, "J2000", "NONE", soiID, stateRt, &lt);
+	spkezr_c(std::to_string(spiceID).c_str(), bt, "ECLIPJ2000", "NONE", soiID, stateBt, &lt);
+	spkezr_c(std::to_string(spiceID).c_str(), rt, "ECLIPJ2000", "NONE", soiID, stateRt, &lt);
 	stateChange(stateBt);
 	stateChange(stateRt);
 
@@ -598,7 +675,7 @@ void makeRefinedList(vertex_t* refinedList, vertex_t* lineBuffer, const int line
 		*pbtIdx = btIdx; *prtIdx = rtIdx;
 
 	for (int i = 0; i < REF_LIST_SIZE_U; i++) {
-		spkezr_c(std::to_string(baryID).c_str(), bt + rfDt * (i + 1), "J2000", "NONE", soiID, stateDt, &lt);
+		spkezr_c(std::to_string(spiceID).c_str(), bt + rfDt * (i + 1), "ECLIPJ2000", "NONE", soiID, stateDt, &lt);
 		stateChange(stateDt);
 		if (soiID != "0") {
 			for (int i = 0; i < 3; i++) {

@@ -44,15 +44,17 @@ typedef struct geom_shader_lines_device
 
     struct geom_shader_lines_attrib_locations
     {
-        GLuint pos_width;
-        GLuint col;
+        GLuint pos_width1;
+        GLuint col1;
+        GLuint pos_width2;
+        GLuint col2;
     } attribs;
 
     uniform_data_t* uniform_data;
 } geom_shader_lines_device_t
 ;
 
-geom_shader_lines_device_t geom_shdr_lines_init_device( void );
+geom_shader_lines_device_t* geom_shdr_lines_init_device( void );
 uint32_t geom_shdr_lines_update(geom_shader_lines_device_t* device, const void* data, int32_t n_elems, int32_t elem_size,
                                  uniform_data_t* uniform_data);
 void geom_shdr_lines_render( const geom_shader_lines_device_t* device, const int32_t count );

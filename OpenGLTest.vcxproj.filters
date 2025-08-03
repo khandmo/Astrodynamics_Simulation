@@ -51,6 +51,12 @@
     <ClCompile Include="imgui\imgui_impl_opengl3.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
+    <ClCompile Include="ArtSat.cpp">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="Marker.cpp">
+      <Filter>Modules</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EBO.h">
@@ -104,6 +110,12 @@
     <ClInclude Include="GUI.h">
       <Filter>Headers</Filter>
     </ClInclude>
+    <ClInclude Include="ArtSat.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="Marker.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="debug.frag">
@@ -146,6 +158,15 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="imgui\imgui.natstepfilter" />
+    <None Include="simple.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="simple.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="geoLine2.vert">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shaders">

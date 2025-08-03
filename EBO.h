@@ -15,6 +15,7 @@ public:
 	// takes vertices and size in bytes
 	EBO(std::vector <GLuint>& indices);
 
+	void Update(std::vector <GLuint>& indices);
 	void Bind();
 	void Unbind();
 	void Delete();

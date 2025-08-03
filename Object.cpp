@@ -6,7 +6,7 @@ Object::Object(){
 
 }
 
-void Object::Box(GLfloat length, GLfloat red, GLfloat green, GLfloat blue) {
+void Object::Box(GLfloat length) {
 
 	// Vertices
 
@@ -26,7 +26,7 @@ void Object::Box(GLfloat length, GLfloat red, GLfloat green, GLfloat blue) {
 			// get color from input and texture from texOrder
 			
 			glm::vec3 pos = glm::vec3(scale * posOrder[2*j], scale * posOrder[2*j + 1], scale * signCheck);
-			glm::vec3 col = glm::vec3(red, green, blue);
+			glm::vec3 col = glm::vec3(1.0f, 1.0f, 1.0f);
 			glm::vec2 tex = glm::vec2(texOrder[2*j], texOrder[2*j + 1]);
 
 			// x norm
@@ -47,9 +47,9 @@ void Object::Box(GLfloat length, GLfloat red, GLfloat green, GLfloat blue) {
 	Object::vertices = boxVert;
 
 
-	// Indices (every new vertex is seperated by 3
+	// Indices (every new vertex is seperated by 3)
 
-	GLuint boxI[36] = { // 6 faces * 2 triangles each * 3 vertices each
+	std::vector <GLuint> boxI = { // 6 faces * 2 triangles each * 3 vertices each
 		// for each vertex in boxV the norms are in x,y,z order - the front/back uses z, top/bottom uses y, right/left uses x
 		2, 5, 8, 5, 8, 11, // front face (z, +2)
 		14, 17, 20, 17, 20, 23, // back face (z, +2)
@@ -58,12 +58,12 @@ void Object::Box(GLfloat length, GLfloat red, GLfloat green, GLfloat blue) {
 		0, 12, 3, 3, 15, 12, // right face (x, +0)
 		6, 18, 9, 9, 21, 18 // left face (x, +0)
 	};
-	std::vector <GLuint> boxElem(boxI, boxI + sizeof(boxI) / sizeof(GLuint));
-	Object::indices = boxElem;
+	//std::vector <GLuint> boxElem(boxI, boxI + sizeof(boxI) / sizeof(GLuint));
+	Object::indices = boxI;
 }
 
 // there is a somewhat noticable seam in the rings but my mental arithmetic can't explain why, the texures should always be within bounds
-void Object::Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat green, GLfloat blue) {
+void Object::Rings(float innerRadius, float outerRadius) {
 	// Vertices
 	const int divisions = 512;
 	Vertex ringV[6 * divisions] = {};
@@ -74,7 +74,7 @@ void Object::Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat gr
 	glm::vec3 vPos;
 	glm::vec2 vTex;
 	glm::vec3 vNorm = glm::vec3(0.0f, 1.0f, 0.0f);
-	glm::vec3 vCol = glm::vec3(red, green, blue);
+	glm::vec3 vCol = glm::vec3(1.0f, 1.0f, 1.0f);
 
 	for (int i = 0; i < divisions; i++) {
 		// outer point
@@ -88,11 +88,13 @@ void Object::Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat gr
 		ringV[(i * 6) + 1] = { vPos, vNorm, vCol, vTex };
 		vPos = glm::vec3(innerRadius, glm::half_pi<float>(), (i + 1) * constAngleDiv);
 		vTex = glm::vec2(0.0f, 1.0f - ((i + 1) / divisions));
+		if (i + 1 == divisions) vTex = glm::vec2(0.0f, 1.0f); // connect last pt to first pt
 		ringV[(i * 6) + 2] = { vPos, vNorm, vCol, vTex };
 		ringV[(i * 6) + 5] = ringV[(i * 6) + 2];
 		// second outer point
 		vPos = glm::vec3(outerRadius, glm::half_pi<float>(), (i + 1) * constAngleDiv);
 		vTex = glm::vec2(1.0f, 1.0f - ((i + 1) / divisions));
+		if (i + 1 == divisions) vTex = glm::vec2(1.0f, 1.0f); // connect last pt to first pt
 		ringV[(i * 6) + 4] = { vPos, vNorm, vCol, vTex };
 	}
 
@@ -113,14 +115,16 @@ void Object::Rings(float innerRadius, float outerRadius, GLfloat red, GLfloat gr
 	Object::indices = ringElem;
 }
 
-void Object::Sphere(float radius, GLfloat red, GLfloat green, GLfloat blue) {
+void Object::Sphere(float radius) {
 	// Vertices
+
 	const int petals = 96; 
 	const int breakpts = 16; // number of theta divisions from pole to equator
+	
 	// axial vertex, 1st breakpt norms, middle breakpt norms, equator norms, all * 2
 	const int arrayNum = 2 * (petals + (petals * 5) + (petals * 6 * (breakpts - 1)) + (petals * 3)); // buffer overrun
 	Vertex sphV[arrayNum] = {};
-	glm::vec3 vCol = glm::vec3(red, green, blue);
+	glm::vec3 vCol = glm::vec3(1.0f, 1.0f, 1.0f);
 	glm::vec2 vTex = glm::vec2(0.0f, 0.0f); // leave blank for UV mapping
 	
 	// top cap (top point, straight out, phi angle, top point, phi angle, 2phi angle, ...)
