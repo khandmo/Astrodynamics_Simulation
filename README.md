@@ -16,7 +16,7 @@ needed.<br><br><br>
 ## SPICE Kernels
 
 This repo does not contain the kernels for the SPICE Toolkit to obtain data for the celestial bodies. The 
-system file holds the names of the kernels I used at the top and all kernels can be found a the link below. If 
+system file holds the names of the kernels I used at the top and all kernels can be found at the link below. If 
 you want to use the sim through different time periods, just modify those lines.
 
 https://naif.jpl.nasa.gov/pub/naif/generic_kernels/<br><br><br>
@@ -29,14 +29,18 @@ will prepare the file for input into the program.
 
 The Ephemeris Type should be "Vector Table"
 The Coordinate Center should be Geocentric, code 500.
-The Step Time should be 6 hours no matter the range of dates.
+The Step Time should be 6 hours, no matter the range of dates.
 The Vector Table Settings should return the (2) State vector. Uncertainties are not necessary.
 Reference Frame should be ICRF, plane is ecliptic (standard obliquity, inertial).
 Output Units in km and seconds.
 
-Eliminate the text file above the name of the first Trajectory. There should be 2 spaces before the text in each line
+Eliminate the text file above the name of the first trajectory. There should be 2 spaces before the text in each line
 of the trajectories. The line directly under the final trajectory should be "***". This is immediately followed by the first
 line of state data. The line directly under the final line of state data should be "***". This should terminate the file.
+
+Input the file into the program by going to System.cpp in the source code and adding
+'initSat("*satellite name*", "**file*.txt");'
+underneath the "initPersistSats" function call in the System class constructor.
 
 https://ssd.jpl.nasa.gov/horizons/app.html#/<br><br><br>
 
@@ -61,14 +65,10 @@ Scroll wheel - Zoom <br>
 A/D - Change focus body<br>
 Left Mouse Hold - Revolve around focus body<br>
 
-Body Manipulation - Bodies are added in the main file and must be added to the 
-array of meshes (and the number of bodies constant must be appropriately set).
-Textures must be a perfect box, power of 2 resolution. The radius and mass of the object
+Celestial Bodies are added in the system.cpp file, follow the scheme of the others to add new ones (within SPICE).
+Textures must be a perfect box, power of 2 resolution, if not the default grey. The radius and mass of the object
 and initial positions are also labeled in the main file.
-Non-Solar meshes should be shaded with the default shader as they are in the main file.
-The render file has a function "Move" which assigns velocities, rotational speed,
-and orbital evolution speed (dt). Higher dt results in slower evolution. Lower dt
-results in faster evolution.<br><br>
+Non-Solar meshes should be shaded with the default shader as they are in the main file.<br><br>
 
 ### Links
 ---
@@ -85,7 +85,7 @@ https://svs.gsfc.nasa.gov/cgi-bin/details.cgi?aid=4720
 https://ilrs.gsfc.nasa.gov/docs/2014/196C.pdf<br><br><br><br>
 
 
-### Known Problems
+### Known Problems / FAQ
 ---
 
 Using the GUI to go to a maneuver on a sat and letting some uncertain amount of time pass may result
@@ -97,6 +97,22 @@ can be wrong. <br><br>
 Planet and moon orbits can be wrong / have chunks raised or lowered out of the normal plane. All these bugs
 are related to the "refined list" which is supposed to account for smoother orbits near the body itself.
 This list can be connected to a main and less smooth orbit.<br><br>
+
+Small moons look like that because the simulation units are relatively small and accuracy is hard to come by. No
+reason it can't be changed. I think it looks like telescopic imagery from far away so I don't mind.<br><br>
+
+
+### Future Plans
+---
+
+Improving the accuracy of the data sent to the GUI, making the state update infrastructure more robust through
+both forward and backward time travel. Energy replenishment for trajectory accuracy, smarter time step 
+algorithms. Show planet's current position when zoomed out. Fix refined list problems on orbital paths of bodies.
+Add initial dry mass, wet, engine specs, calculate delta-V in initialization process of a satellite, and
+operate missions under those constraints - including exotic propulsion methods like ion and nuclear. Tools for setting up
+gravity assists, providing transfer windows for mission objectives depending on the amount of delta-V willing to be
+used / elapsed time constraints. Next / last orbit preview to see orbital precession. Change colors of trajectories
+through different spheres of influence. Align rotational axes with true values.
 
 
 
