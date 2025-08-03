@@ -46,13 +46,13 @@ https://ssd.jpl.nasa.gov/horizons/app.html#/<br><br><br>
 
 ## Dependencies
 
-- C SPICE Toolkit
+- C SPICE Toolkit<br>
 https://naif.jpl.nasa.gov/naif/toolkit.html <br>
 
-- ImGui from ocornut, popular modular GUI library
+- ImGui from ocornut, popular modular GUI library<br>
 https://github.com/ocornut/imgui <br>
 
-- Lines from mhalber, to render (geometry shader) lines in OpenGL.
+- Lines from mhalber, to render (geometry shader) lines in OpenGL.<br>
 https://github.com/mhalber/Lines/tree/master <br><br><br>
 
 
