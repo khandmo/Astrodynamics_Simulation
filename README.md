@@ -44,6 +44,17 @@ underneath the "initPersistSats" function call in the System class constructor.
 
 https://ssd.jpl.nasa.gov/horizons/app.html#/<br><br><br>
 
+## Dependencies
+
+- C SPICE Toolkit
+https://naif.jpl.nasa.gov/naif/toolkit.html <br>
+
+- ImGui from ocornut, popular modular GUI library
+https://github.com/ocornut/imgui <br>
+
+- Lines from mhalber, to render (geometry shader) lines in OpenGL.
+https://github.com/mhalber/Lines/tree/master <br><br><br>
+
 
 ### Controls (use at your own discretion)
 ---
