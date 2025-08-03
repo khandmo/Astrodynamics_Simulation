@@ -35,11 +35,11 @@ Reference Frame should be ICRF, plane is ecliptic (standard obliquity, inertial)
 Output Units in km and seconds.
 
 Eliminate the text file above the name of the first trajectory. There should be 2 spaces before the text in each line
-of the trajectories. The line directly under the final trajectory should be "***". This is immediately followed by the first
-line of state data. The line directly under the final line of state data should be "***". This should terminate the file.
+of the trajectories. The line directly under the final trajectory should be "\*\*\*". This is immediately followed by the first
+line of state data. The line directly under the final line of state data should be "\*\*\*". This should terminate the file.
 
 Input the file into the program by going to System.cpp in the source code and adding<br>
-initSat("*satellite name*", "**file*.txt");<br>
+initSat("*satellite name*", "*file*.txt");<br>
 underneath the "initPersistSats" function call in the System class constructor.
 
 https://ssd.jpl.nasa.gov/horizons/app.html#/<br><br><br>
@@ -81,7 +81,7 @@ Textures must be a perfect box, power of 2 resolution, if not the default grey. 
 and initial positions are also labeled in the main file.
 Non-Solar meshes should be shaded with the default shader as they are in the main file.<br><br>
 
-### Links
+### Links / References
 ---
 
 #### Methods:
