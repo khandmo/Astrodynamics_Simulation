@@ -1,4 +1,4 @@
-Astrodynamics Program:
+#### Astrodynamics Program:
 Visually represents a replica solar system with nothing but C++, OpenGL and GLFW libraries.
 Rendering, shadow mapping, vertex handling all done by hand.
 Spheres approximated with triangles and texture laying by hand, no models, no copy + paste formulae.
